@@ -17,6 +17,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
+  BarChart3,
   Building2,
   ChevronDown,
   ClipboardList,
@@ -42,6 +43,7 @@ import { ProductsView } from "@/components/products-view";
 import { PurchasesView } from "@/components/purchases-view";
 import { OrdersView } from "@/components/orders-view";
 import { ImmoView } from "@/components/immo-view";
+import { ReportsView } from "@/components/reports-view";
 import { UsersView } from "@/components/users-view";
 import { SettingsView } from "@/components/settings-view";
 import { LoginView } from "@/components/login-view";
@@ -56,8 +58,9 @@ type ViewId =
   | "factures"
   | "proforma"
   | "commandes"
-  | "achats"
   | "clients"
+  | "rapports"
+  | "achats"
   | "produits"
   | "immo"
   | "utilisateurs"
@@ -78,6 +81,7 @@ const NAV: {
   { id: "proforma", label: "Factures proforma", short: "Proforma", icon: FileSignature, section: "Ventes" },
   { id: "commandes", label: "Commandes prévisionnelles", short: "Commandes", icon: ClipboardList, section: "Ventes" },
   { id: "clients", label: "Clients", short: "Clients", icon: Users2, section: "Ventes" },
+  { id: "rapports", label: "Rapports de vente", short: "Rapports", icon: BarChart3, section: "Ventes" },
   // ─── Achats & stock ───
   { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag, section: "Achats & stock" },
   { id: "produits", label: "Produits & stock", short: "Produits", icon: Package, section: "Achats & stock" },
@@ -432,6 +436,7 @@ export function AppShell() {
               {view === "commandes" && <OrdersView />}
               {view === "achats" && <PurchasesView />}
               {view === "clients" && <ClientsView />}
+              {view === "rapports" && <ReportsView />}
               {view === "produits" && <ProductsView />}
               {view === "immo" && <ImmoView />}
               {view === "utilisateurs" && (isAdmin ? <UsersView currentUser={user} /> : <RestrictedCard />)}

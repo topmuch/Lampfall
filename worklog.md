@@ -89,3 +89,21 @@ Work Log:
 
 Stage Summary:
 - Sidebar réorganisé en 5 sections logiques et vérifié sur desktop + mobile ; comportement et rôles (admin/employé) inchangés.
+
+---
+Task ID: 5
+Agent: Z.ai Code (principal)
+Task: Ajouter un module « Rapports de vente ».
+
+Work Log:
+- API `GET /api/reports/sales?from=&to=` : synthèse (nb factures, CA HT/TVA/CA TTC, encaissé, reste, panier moyen, articles vendus, compteurs paiement/livraison), évolution mensuelle, top 10 clients, ventes par catégorie (quantité + montant), top 10 produits, détail des factures VENTE de la période (fallback : année courante).
+- Types `SalesReport`/`SalesReportSummary` ajoutés à `src/lib/types.ts`.
+- PDF `buildSalesReportPDF(report, periodLabel)` dans `src/lib/pdf.ts` : en-tête société (paramètres), tableau de synthèse 8 colonnes, ligne des statuts, sections Évolution mensuelle (avec totaux), Top clients, Ventes par catégorie, Top produits, Détail des factures (avec pied TOTAL), sauts de page automatiques.
+- Vue `reports-view.tsx` : sélecteur de période (6 préréglages + dates personnalisées), 4 cartes KPI dégradées, 8 mini-indicateurs, histogramme « Évolution mensuelle du CA », Top clients et Ventes par catégorie en barres horizontales, tableaux Top produits et Détail des factures (max-h-96 scrollable) avec PDF individuel par facture, export du rapport complet en PDF (télécharger + aperçu) et en CSV (BOM UTF-8, séparateur ;), état vide soigné, boutons désactivés si aucune donnée.
+- Sidebar : nouvel onglet « Rapports » (icône BarChart3) dans la section Ventes, après Clients ; ViewId « rapports » + rendu dans app-shell.
+- Vérifié via agent-browser : vue complète (KPI 2,49 M / 1,52 M / 965 k / 7), graphique mensuel (08/26 : 1,75 M ; 09/26 : 741 k), top clients/catégories/produits, export PDF 2 pages validé par extraction texte (synthèse, totaux, toutes les sections), export CSV (10 colonnes, BOM), PDF individuel FV-2026-0007 retéléchargé, préréglage « Aujourd'hui » → état vide + boutons désactivés, mobile 390 px sans scroll horizontal, mode sombre OK, aucune erreur console/serveur.
+- Lint : 0 erreur, 0 warning.
+
+Stage Summary:
+- Module Rapports de vente opérationnel : analyse par période avec préréglages, synthèse financière, graphiques, top clients/catégories/produits, détail facturable, exports PDF (rapport complet façon société) et CSV. Onglet « Rapports » intégré à la section Ventes du sidebar.
+- Nouveaux artefacts : src/app/api/reports/sales/route.ts, src/components/reports-view.tsx, buildSalesReportPDF (pdf.ts), types SalesReport (types.ts).

@@ -194,3 +194,32 @@ export interface UserRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+// ─── Rapports de vente ──────────────────────────────────────────────────────
+
+export interface SalesReportSummary {
+  count: number;
+  totalHT: number;
+  totalTTC: number;
+  vatTotal: number;
+  paidTotal: number;
+  unpaidTotal: number;
+  avgTicket: number;
+  paidCount: number;
+  partialCount: number;
+  unpaidCount: number;
+  deliveredCount: number;
+  notDeliveredCount: number;
+  itemsCount: number;
+}
+
+export interface SalesReport {
+  from: string;
+  to: string;
+  summary: SalesReportSummary;
+  monthly: { monthKey: string; label: string; total: number; paid: number }[];
+  topClients: { name: string; count: number; total: number }[];
+  byCategory: { category: string; label: string; total: number; quantity: number }[];
+  topProducts: { name: string; quantity: number; total: number }[];
+  invoices: Invoice[];
+}

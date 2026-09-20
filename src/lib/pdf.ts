@@ -3,7 +3,7 @@
 // Génération de documents PDF côté client avec jsPDF + AutoTable
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { Invoice, Order, Purchase, Client, Tenant, Rent } from "./types";
+import type { Invoice, Order, Purchase, Client, Tenant, Rent, SalesReport } from "./types";
 import {
   DELIVERY_LABELS,
   ORDER_STATUS_LABELS,
@@ -737,6 +737,230 @@ export async function buildInvoiceListPDF(
     },
     margin: { left: 14, right: 14 },
   });
+
+  drawFooter(doc);
+  return doc;
+}
+
+// ─── Rapport de ventes ─────────────────────────────────────────────────────
+
+/** Titre de section (vert, souligné fin) — renvoie le Y de départ du contenu. */
+function sectionTitle(doc: jsPDF, text: string, y: number): number {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GREEN);
+  doc.text(text.toUpperCase(), 14, y);
+  doc.setDrawColor(...GREEN_LIGHT);
+  doc.setLineWidth(0.3);
+  doc.line(14, y + 1.8, 196, y + 1.8);
+  return y + 6;
+}
+
+function lastTableY(doc: jsPDF, fallback: number): number {
+  const last = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
+  return last ? last.finalY : fallback;
+}
+
+const REPORT_TABLE_STYLES = {
+  theme: "grid" as const,
+  styles: {
+    font: "helvetica",
+    fontSize: 8,
+    textColor: DARK as unknown as number[],
+    lineColor: [210, 218, 213],
+    lineWidth: 0.15,
+    cellPadding: { top: 1.6, right: 2, bottom: 1.6, left: 2 },
+  },
+  headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
+  alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
+  margin: { left: 14, right: 14 },
+};
+
+/** Passe à la page suivante s'il reste moins de `needed` mm. */
+function ensureSpace(doc: jsPDF, y: number, needed: number): number {
+  if (y + needed > 275) {
+    doc.addPage();
+    return 20;
+  }
+  return y;
+}
+
+export async function buildSalesReportPDF(report: SalesReport, periodLabel: string): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await getLogoBase64();
+  const s = report.summary;
+
+  drawHeader(doc, logo, "RAPPORT DE VENTES", periodLabel);
+
+  // ── Synthèse financière (paires libellé / valeur) ──
+  const labelCell = (t: string) => ({
+    content: t,
+    styles: {
+      fillColor: GREEN_BG as unknown as number[],
+      textColor: GREEN as unknown as number[],
+      fontStyle: "bold" as const,
+      halign: "right" as const,
+    },
+  });
+  const valueCell = (t: string) => ({ content: t, styles: { fontStyle: "bold" as const, halign: "right" as const } });
+
+  autoTable(doc, {
+    startY: 48,
+    head: [],
+    body: [
+      [
+        labelCell("Factures"), valueCell(String(s.count)),
+        labelCell("CA HT"), valueCell(fmtNum(s.totalHT)),
+        labelCell("TVA"), valueCell(fmtNum(s.vatTotal)),
+        labelCell("CA TTC"), valueCell(`${fmtNum(s.totalTTC)} FCFA`),
+      ],
+      [
+        labelCell("Encaissé"), valueCell(fmtNum(s.paidTotal)),
+        labelCell("Reste à payer"), valueCell(fmtNum(s.unpaidTotal)),
+        labelCell("Panier moyen"), valueCell(fmtNum(s.avgTicket)),
+        labelCell("Articles vendus"), valueCell(fmtNum(s.itemsCount)),
+      ],
+    ],
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      textColor: DARK as unknown as number[],
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
+      cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
+    },
+    columnStyles: Object.fromEntries(
+      Array.from({ length: 8 }, (_, i) => [i, { cellWidth: 22.75 }])
+    ) as Record<number, { cellWidth: number }>,
+    margin: { left: 14, right: 14 },
+  });
+
+  // Ligne des statuts
+  let y = lastTableY(doc, 48 + 16) + 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY);
+  doc.text(
+    `Payées : ${s.paidCount}    \u2022    Partielles : ${s.partialCount}    \u2022    Impayées : ${s.unpaidCount}    \u2022    Livrées : ${s.deliveredCount}    \u2022    Non livrées : ${s.notDeliveredCount}`,
+    14,
+    y
+  );
+  y += 8;
+
+  // ── Évolution mensuelle ──
+  if (report.monthly.length > 0) {
+    y = ensureSpace(doc, y, 30);
+    y = sectionTitle(doc, "Évolution mensuelle du chiffre d'affaires", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Période", "CA TTC", "Encaissé", "Reste"]],
+      body: report.monthly.map((m) => [
+        m.label,
+        fmtNum(m.total),
+        fmtNum(m.paid),
+        fmtNum(m.total - m.paid),
+      ]),
+      foot: [[
+        "TOTAL",
+        fmtNum(report.monthly.reduce((a, m) => a + m.total, 0)),
+        fmtNum(report.monthly.reduce((a, m) => a + m.paid, 0)),
+        fmtNum(report.monthly.reduce((a, m) => a + (m.total - m.paid), 0)),
+      ]],
+      ...REPORT_TABLE_STYLES,
+      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+      columnStyles: {
+        0: { cellWidth: 50 },
+        1: { halign: "right" },
+        2: { halign: "right" },
+        3: { halign: "right", fontStyle: "bold" },
+      },
+    });
+    y = lastTableY(doc, y + 20) + 8;
+  }
+
+  // ── Top clients ──
+  if (report.topClients.length > 0) {
+    y = ensureSpace(doc, y, 30);
+    y = sectionTitle(doc, "Top clients", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Client", "Factures", "Total TTC"]],
+      body: report.topClients.map((c) => [c.name, String(c.count), fmtNum(c.total)]),
+      ...REPORT_TABLE_STYLES,
+      columnStyles: {
+        0: { cellWidth: 110 },
+        1: { cellWidth: 26, halign: "center" },
+        2: { halign: "right", fontStyle: "bold" },
+      },
+    });
+    y = lastTableY(doc, y + 20) + 8;
+  }
+
+  // ── Ventes par catégorie ──
+  if (report.byCategory.length > 0) {
+    y = ensureSpace(doc, y, 30);
+    y = sectionTitle(doc, "Ventes par catégorie", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Catégorie", "Quantité", "Total"]],
+      body: report.byCategory.map((c) => [c.label, fmtNum(c.quantity), fmtNum(c.total)]),
+      ...REPORT_TABLE_STYLES,
+      columnStyles: {
+        0: { cellWidth: 110 },
+        1: { cellWidth: 26, halign: "center" },
+        2: { halign: "right", fontStyle: "bold" },
+      },
+    });
+    y = lastTableY(doc, y + 20) + 8;
+  }
+
+  // ── Top produits ──
+  if (report.topProducts.length > 0) {
+    y = ensureSpace(doc, y, 30);
+    y = sectionTitle(doc, "Top produits", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Produit", "Quantité", "Total"]],
+      body: report.topProducts.map((p) => [p.name, fmtNum(p.quantity), fmtNum(p.total)]),
+      ...REPORT_TABLE_STYLES,
+      columnStyles: {
+        0: { cellWidth: 110 },
+        1: { cellWidth: 26, halign: "center" },
+        2: { halign: "right", fontStyle: "bold" },
+      },
+    });
+    y = lastTableY(doc, y + 20) + 8;
+  }
+
+  // ── Détail des factures ──
+  if (report.invoices.length > 0) {
+    y = ensureSpace(doc, y, 40);
+    y = sectionTitle(doc, "Détail des factures", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["N°", "Date", "Client", "Paiement", "Livraison", "Total TTC"]],
+      body: report.invoices.map((f) => [
+        f.number,
+        fmtDate(f.date),
+        f.clientName || "Client comptoir",
+        PAYMENT_LABELS[f.paymentStatus] ?? f.paymentStatus,
+        DELIVERY_LABELS[f.deliveryStatus] ?? f.deliveryStatus,
+        fmtNum(f.totalTTC),
+      ]),
+      foot: [["TOTAL", "", "", "", "", fmtNum(s.totalTTC)]],
+      ...REPORT_TABLE_STYLES,
+      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+      columnStyles: {
+        0: { cellWidth: 30, fontStyle: "bold" },
+        1: { cellWidth: 22, halign: "center" },
+        2: { cellWidth: 62 },
+        3: { cellWidth: 22, halign: "center" },
+        4: { cellWidth: 22, halign: "center" },
+        5: { halign: "right", fontStyle: "bold" },
+      },
+    });
+  }
 
   drawFooter(doc);
   return doc;
