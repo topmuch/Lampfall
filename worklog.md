@@ -74,3 +74,18 @@ Stage Summary:
 - Les 5 demandes sont livrées et vérifiées dans le navigateur : dashboard premium fidèle à l'image (KPI colorés, calendrier heatmap mensuel, tranches, top clients/catégories, boutons Détails), toggle sombre/clair luxueux violet & or, Paramètres société injectés dans l'app et dans les PDF (RC/NINEA/logo), gestion utilisateurs ADMIN/EMPLOYÉ avec rôles et protections, repo GitHub https://github.com/topmuch/Lampfall alimenté.
 - Identifiants par défaut : admin / admin123 (à modifier). Compte employé de démonstration : fsow / fsow2024.
 - Nouveaux artefacts : prisma/seed-v3.ts, src/lib/auth.ts, src/lib/auth-client.ts, src/lib/settings-store.ts, src/components/{login-view,settings-view,users-view,theme-provider,theme-toggle}.tsx, src/app/api/{auth/*,users/*,settings}/*.
+
+---
+Task ID: 4
+Agent: Z.ai Code (principal)
+Task: Réorganiser les onglets du sidebar.
+
+Work Log:
+- `src/components/app-shell.tsx` : ajout d'un champ `section` à chaque entrée de NAV et réécriture de `NavItems` pour regrouper les onglets avec des intitulés de section (majuscules discrètes), partagés desktop + drawer mobile.
+- Nouvel ordre : Pilotage (Dashboard) → Ventes (Factures, Proforma, Commandes, Clients) → Achats & stock (Achats, Produits) → Immobilier (Immo) → Administration (Utilisateurs, Paramètres, admin seul).
+- « Clients » déplacé dans le groupe Ventes (cohérence métier : les clients appartiennent au cycle de vente) ; les ID de vues sont inchangés, aucune régression sur la navigation.
+- Vérifié via agent-browser : sidebar desktop avec les 5 sections, navigation « Clients » fonctionnelle, drawer mobile 390 px avec sections + état actif doré, aucune erreur console bloquante.
+- Commit `6fb2a98` (push GitHub non refait : le jeton précédent a été retiré du remote pour sécurité).
+
+Stage Summary:
+- Sidebar réorganisé en 5 sections logiques et vérifié sur desktop + mobile ; comportement et rôles (admin/employé) inchangés.
