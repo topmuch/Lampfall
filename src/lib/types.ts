@@ -16,11 +16,46 @@ export interface Product {
   name: string;
   reference?: string | null;
   category: string;
+  image?: string | null;
   purchasePrice: number;
   salePrice: number;
   stock: number;
   unit: string;
   minStock: number;
+  createdAt: string;
+}
+
+export interface Category {
+  id: string;
+  code: string;
+  label: string;
+  createdAt: string;
+}
+
+export interface CategoryWithCount extends Category {
+  productCount?: number;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  phone?: string | null;
+  building: string;
+  unit?: string | null;
+  monthlyRent: number;
+  notes?: string | null;
+  createdAt: string;
+  rents: Rent[];
+}
+
+export interface Rent {
+  id: string;
+  tenantId: string;
+  month: string; // AAAA-MM
+  amount: number;
+  status: "PAYE" | "NON_PAYE";
+  paidAt?: string | null;
+  notes?: string | null;
   createdAt: string;
 }
 

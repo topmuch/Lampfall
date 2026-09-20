@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
+  Building2,
   ClipboardList,
   FileSignature,
   FileText,
@@ -16,12 +17,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPANY } from "@/lib/constants";
+import { CategoriesProvider } from "@/components/categories-provider";
 import { DashboardView } from "@/components/dashboard-view";
 import { InvoicesView } from "@/components/invoices-view";
 import { ClientsView } from "@/components/clients-view";
 import { ProductsView } from "@/components/products-view";
 import { PurchasesView } from "@/components/purchases-view";
 import { OrdersView } from "@/components/orders-view";
+import { ImmoView } from "@/components/immo-view";
 
 type ViewId =
   | "dashboard"
@@ -30,7 +33,8 @@ type ViewId =
   | "commandes"
   | "achats"
   | "clients"
-  | "produits";
+  | "produits"
+  | "immo";
 
 const NAV: { id: ViewId; label: string; short: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "dashboard", label: "Tableau de bord", short: "Tableau", icon: LayoutDashboard },
@@ -40,6 +44,7 @@ const NAV: { id: ViewId; label: string; short: string; icon: React.ComponentType
   { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag },
   { id: "clients", label: "Clients", short: "Clients", icon: Users },
   { id: "produits", label: "Produits & stock", short: "Produits", icon: Package },
+  { id: "immo", label: "Immobilier — Loyers", short: "Immo", icon: Building2 },
 ];
 
 function NavItems({
@@ -81,6 +86,12 @@ function NavItems({
 export function AppShell() {
   const [view, setView] = useState<ViewId>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Évite la mismatch d'ID Radix (useId) entre SSR et client au premier rendu
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   const select = (id: ViewId) => {
     setView(id);
@@ -89,7 +100,8 @@ export function AppShell() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <CategoriesProvider>
+      <div className="min-h-screen flex flex-col">
       {/* Header mobile */}
       <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between gap-2 border-b bg-sidebar px-4 py-3 text-sidebar-foreground">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -101,31 +113,33 @@ export function AppShell() {
             <p className="text-[10px] text-sidebar-foreground/70 truncate">Facturation</p>
           </div>
         </div>
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-sidebar-foreground hover:bg-sidebar-accent"
-              aria-label="Ouvrir le menu"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="bg-sidebar text-sidebar-foreground border-sidebar-border w-64 p-4">
-            <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="rounded-lg bg-white p-1">
-                <Image src="/logo.png" alt="" width={36} height={31} className="h-8 w-auto" />
+        {mounted && (
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-sidebar-foreground hover:bg-sidebar-accent"
+                aria-label="Ouvrir le menu"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="bg-sidebar text-sidebar-foreground border-sidebar-border w-64 p-4">
+              <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="rounded-lg bg-white p-1">
+                  <Image src="/logo.png" alt="" width={36} height={31} className="h-8 w-auto" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm">ETS LAMP FALL</p>
+                  <p className="text-[10px] opacity-70">{COMPANY.tagline}</p>
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-sm">ETS LAMP FALL</p>
-                <p className="text-[10px] opacity-70">{COMPANY.tagline}</p>
-              </div>
-            </div>
-            <NavItems active={view} onSelect={select} />
-          </SheetContent>
-        </Sheet>
+              <NavItems active={view} onSelect={select} />
+            </SheetContent>
+          </Sheet>
+        )}
       </header>
 
       <div className="flex flex-1">
@@ -161,6 +175,7 @@ export function AppShell() {
             {view === "achats" && <PurchasesView />}
             {view === "clients" && <ClientsView />}
             {view === "produits" && <ProductsView />}
+            {view === "immo" && <ImmoView />}
           </div>
         </main>
       </div>
@@ -178,6 +193,7 @@ export function AppShell() {
           </p>
         </div>
       </footer>
-    </div>
+      </div>
+    </CategoriesProvider>
   );
 }

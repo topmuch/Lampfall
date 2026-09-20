@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PRODUCT_CATEGORIES } from "@/lib/constants";
+import { isValidCategory, sanitizeImage } from "@/lib/product-validation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     if (q) {
       where.OR = [{ name: { contains: q } }, { reference: { contains: q } }];
     }
-    if (category && PRODUCT_CATEGORIES.includes(category as never)) {
+    if (category && category !== "all") {
       where.category = category;
     }
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     if (!name) {
       return NextResponse.json({ error: "Le nom du produit est obligatoire" }, { status: 400 });
     }
-    if (!PRODUCT_CATEGORIES.includes(body.category)) {
+    if (!(await isValidCategory(body.category))) {
       return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
     }
     const product = await db.product.create({
@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
         name,
         reference: body.reference?.toString().trim() || null,
         category: body.category,
+        image: sanitizeImage(body.image),
         purchasePrice: Number(body.purchasePrice) || 0,
         salePrice: Number(body.salePrice) || 0,
         stock: Math.round(Number(body.stock) || 0),

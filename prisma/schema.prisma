@@ -23,13 +23,23 @@ model Client {
   orders   Order[]
 }
 
+// ─── Catégories (dynamiques) ────────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(cuid())
+  code      String   @unique // SANITAIRE, PLOMBERIE, …
+  label     String // Affichage : Sanitaire, Plomberie, …
+  createdAt DateTime @default(now())
+}
+
 // ─── Produits (catalogue) ───────────────────────────────────────────────────
 
 model Product {
   id            String   @id @default(cuid())
   name          String
   reference     String?
-  category      String // SANITAIRE | PLOMBERIE | LUMINAIRE | ELECTRICITE | GOUTTE_A_GOUTTE | TUYAUTERIE | MIROITERIE | ROBINETTERIE | POMPE | CHASSE_DOUCHE | RESERVOIR_EAU
+  category      String // code catégorie (voir Category)
+  image         String? // data-URL de l'image du produit
   purchasePrice Float    @default(0)
   salePrice     Float    @default(0)
   stock         Int      @default(0)
@@ -133,4 +143,33 @@ model OrderItem {
   quantity    Float
   unitPrice   Float
   total       Float
+}
+
+// ─── Immobilier (locataires & loyers) ───────────────────────────────────────
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String?
+  building    String // Immeuble (ex : Immeuble F)
+  unit        String? // Logement / local occupé
+  monthlyRent Float    @default(0) // Loyer mensuel
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  rents Rent[]
+}
+
+model Rent {
+  id       String    @id @default(cuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  month    String // AAAA-MM (ex : 2026-07)
+  amount   Float     @default(0)
+  status   String    @default("NON_PAYE") // PAYE | NON_PAYE
+  paidAt   DateTime?
+  notes    String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, month])
 }

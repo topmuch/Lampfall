@@ -64,6 +64,36 @@ export const PAYMENT_LABELS: Record<string, string> = {
 
 export const CLIENT_TYPES = ["PARTICULIER", "ENTREPRISE"] as const;
 
+// ─── Immobilier (loyers) ────────────────────────────────────────────────────
+
+export const RENT_STATUSES = ["PAYE", "NON_PAYE"] as const;
+
+export const RENT_STATUS_LABELS: Record<string, string> = {
+  PAYE: "Payé",
+  NON_PAYE: "Non payé",
+};
+
+const MONTH_NAMES = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+/** « 2026-07 » → « juillet 2026 » */
+export function monthLabel(month: string | null | undefined): string {
+  if (!month) return "—";
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!m) return month;
+  const idx = Number(m[2]) - 1;
+  if (idx < 0 || idx > 11) return month;
+  return `${MONTH_NAMES[idx]} ${m[1]}`;
+}
+
+/** Mois courant au format AAAA-MM */
+export function currentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 // ─── Infos société ──────────────────────────────────────────────────────────
 
 export const COMPANY = {

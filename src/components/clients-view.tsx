@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,13 +37,11 @@ import {
   Plus,
   Search,
   Trash2,
-  Users,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
-import { formatDate, formatMoney } from "@/lib/constants";
-import type { Client, Invoice } from "@/lib/types";
-import { PaymentBadge } from "@/components/status-badges";
+import type { Client } from "@/lib/types";
+import { ClientDetailView } from "@/components/client-detail-view";
 
 interface ClientRow extends Client {
   _count?: { invoices: number; orders: number };
@@ -75,18 +73,14 @@ export function ClientsView() {
     `/api/clients${debouncedQ ? `?q=${encodeURIComponent(debouncedQ)}` : ""}`
   );
 
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const selectedClient = (clients ?? []).find((c) => c.id === selectedClientId) ?? null;
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Client | null>(null);
-  const [historyOf, setHistoryOf] = useState<Client | null>(null);
-
-  const historyQuery = useMemo(
-    () => (historyOf ? `/api/invoices?clientId=${historyOf.id}` : null),
-    [historyOf]
-  );
-  const { data: history } = useFetch<Invoice[]>(historyQuery);
 
   useEffect(() => {
     if (dialogOpen) {
@@ -143,6 +137,7 @@ export function ClientsView() {
       if (!res.ok) throw new Error("Suppression impossible");
       toast({ title: "Client supprimé", description: deleting.name });
       setDeleting(null);
+      if (selectedClientId === deleting.id) setSelectedClientId(null);
       refetch();
     } catch (e) {
       toast({
@@ -153,9 +148,41 @@ export function ClientsView() {
     }
   };
 
-  const historyTotal = (history ?? [])
-    .filter((f) => f.type === "VENTE")
-    .reduce((s, f) => s + f.totalTTC, 0);
+  // ─── Page détail client (historique des achats en pleine page) ───────────
+  if (selectedClientId) {
+    return (
+      <div className="space-y-4">
+        {selectedClient ? (
+          <ClientDetailView
+            client={selectedClient}
+            onBack={() => setSelectedClientId(null)}
+            onEdit={(c) => {
+              setEditing(c);
+              setDialogOpen(true);
+            }}
+          />
+        ) : (
+          <div className="space-y-4">
+            <Button variant="outline" size="sm" onClick={() => setSelectedClientId(null)}>
+              ← Retour
+            </Button>
+            <Skeleton className="h-40 w-full" />
+          </div>
+        )}
+
+        {/* Dialog édition (accessible depuis la fiche client) */}
+        <ClientFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          editing={editing}
+          form={form}
+          setForm={setForm}
+          saving={saving}
+          submit={submit}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -247,7 +274,7 @@ export function ClientsView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setHistoryOf(c)}>
+                          <DropdownMenuItem onClick={() => setSelectedClientId(c.id)}>
                             <History className="h-4 w-4" /> Historique des achats
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -276,161 +303,15 @@ export function ClientsView() {
       </Card>
 
       {/* Dialog création / édition */}
-      <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Modifier le client" : "Nouveau client"}</DialogTitle>
-            <DialogDescription>
-              Renseignez les coordonnées du client.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="c-name">Nom complet / Raison sociale *</Label>
-              <Input
-                id="c-name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ex : SARL BTP Teranga"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <div className="flex gap-2">
-                {(["PARTICULIER", "ENTREPRISE"] as const).map((t) => (
-                  <Button
-                    key={t}
-                    type="button"
-                    size="sm"
-                    variant={form.type === t ? "default" : "outline"}
-                    onClick={() => setForm({ ...form, type: t })}
-                  >
-                    {t === "PARTICULIER" ? "Particulier" : "Entreprise"}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="c-phone">Téléphone</Label>
-                <Input
-                  id="c-phone"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="+221 …"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="c-email">Email</Label>
-                <Input
-                  id="c-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="client@email.com"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-address">Adresse</Label>
-              <Input
-                id="c-address"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                placeholder="Quartier, ville"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-notes">Notes</Label>
-              <Textarea
-                id="c-notes"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={2}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Annuler
-            </Button>
-            <Button onClick={submit} disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Historique client */}
-      <Dialog open={historyOf !== null} onOpenChange={(v) => !v && setHistoryOf(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              Historique — {historyOf?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Factures et dates d&apos;achat du client.
-            </DialogDescription>
-          </DialogHeader>
-          {!history || history.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              Aucun achat enregistré pour ce client.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Card>
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">Achats (factures)</p>
-                    <p className="text-lg font-bold tabular-nums">
-                      {history.filter((f) => f.type === "VENTE").length}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">Total facturé</p>
-                    <p className="text-lg font-bold tabular-nums text-primary">
-                      {formatMoney(historyTotal)}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-              <div className="rounded-md border max-h-72 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>N°</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Date d&apos;achat</TableHead>
-                      <TableHead className="text-right">Montant</TableHead>
-                      <TableHead>Paiement</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {history.map((f) => (
-                      <TableRow key={f.id}>
-                        <TableCell className="font-medium">{f.number}</TableCell>
-                        <TableCell className="text-xs">
-                          {f.type === "PROFORMA" ? "Proforma" : "Vente"}
-                        </TableCell>
-                        <TableCell>{formatDate(f.date)}</TableCell>
-                        <TableCell className="text-right tabular-nums whitespace-nowrap">
-                          {formatMoney(f.totalTTC)}
-                        </TableCell>
-                        <TableCell>
-                          <PaymentBadge status={f.paymentStatus} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ClientFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editing={editing}
+        form={form}
+        setForm={setForm}
+        saving={saving}
+        submit={submit}
+      />
 
       {/* Confirmation suppression */}
       <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
@@ -453,5 +334,110 @@ export function ClientsView() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── Dialog création / édition client (partagé) ──────────────────────────────
+
+function ClientFormDialog({
+  open,
+  onOpenChange,
+  editing,
+  form,
+  setForm,
+  saving,
+  submit,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  editing: Client | null;
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  saving: boolean;
+  submit: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onOpenChange(false)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{editing ? "Modifier le client" : "Nouveau client"}</DialogTitle>
+          <DialogDescription>Renseignez les coordonnées du client.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="c-name">Nom complet / Raison sociale *</Label>
+            <Input
+              id="c-name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Ex : SARL BTP Teranga"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Type</Label>
+            <div className="flex gap-2">
+              {(["PARTICULIER", "ENTREPRISE"] as const).map((t) => (
+                <Button
+                  key={t}
+                  type="button"
+                  size="sm"
+                  variant={form.type === t ? "default" : "outline"}
+                  onClick={() => setForm({ ...form, type: t })}
+                >
+                  {t === "PARTICULIER" ? "Particulier" : "Entreprise"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="c-phone">Téléphone</Label>
+              <Input
+                id="c-phone"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+221 …"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-email">Email</Label>
+              <Input
+                id="c-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="client@email.com"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="c-address">Adresse</Label>
+            <Input
+              id="c-address"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="Quartier, ville"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="c-notes">Notes</Label>
+            <Textarea
+              id="c-notes"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={2}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Annuler
+          </Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

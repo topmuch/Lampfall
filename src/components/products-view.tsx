@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,16 +35,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, MoreHorizontal, Package, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  FolderPlus,
+  ImagePlus,
+  MoreHorizontal,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  Tags,
+  Trash2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
-import {
-  CATEGORY_LABELS,
-  PRODUCT_CATEGORIES,
-  formatMoney,
-} from "@/lib/constants";
+import { formatMoney } from "@/lib/constants";
 import type { Product } from "@/lib/types";
 import { CategoryBadge } from "@/components/status-badges";
+import { useCategories } from "@/components/categories-provider";
 
 const UNITS = ["pièce", "barre", "rouleau", "lot", "kit", "mètre", "carton", "sachet"];
 
@@ -57,6 +65,7 @@ interface FormState {
   stock: string;
   unit: string;
   minStock: string;
+  image: string; // data-URL (« » = aucune)
 }
 
 const emptyForm: FormState = {
@@ -68,10 +77,41 @@ const emptyForm: FormState = {
   stock: "0",
   unit: "pièce",
   minStock: "0",
+  image: "",
 };
+
+/** Redimensionne une image choisie en data-URL JPEG (max 640px, ~100 Ko) */
+function fileToDataUrl(file: File, maxSize = 640): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Lecture du fichier impossible"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Fichier image invalide"));
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas indisponible"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export function ProductsView() {
   const { toast } = useToast();
+  const { categories, refetch: refetchCategories } = useCategories();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const debouncedQ = useDebouncedValue(q);
@@ -79,7 +119,7 @@ export function ProductsView() {
   const query = useMemo(() => {
     const params = new URLSearchParams();
     if (debouncedQ) params.set("q", debouncedQ);
-    if (category) params.set("category", category);
+    if (category && category !== "all") params.set("category", category);
     return params.toString();
   }, [debouncedQ, category]);
 
@@ -90,6 +130,15 @@ export function ProductsView() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Product | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+
+  // Gestion des catégories
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [newCategoryLabel, setNewCategoryLabel] = useState("");
+  const [catBusy, setCatBusy] = useState(false);
+  const [catToDelete, setCatToDelete] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (dialogOpen) {
@@ -104,6 +153,7 @@ export function ProductsView() {
               stock: String(editing.stock),
               unit: editing.unit,
               minStock: String(editing.minStock),
+              image: editing.image ?? "",
             }
           : emptyForm
       );
@@ -133,6 +183,7 @@ export function ProductsView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          image: form.image || null,
           purchasePrice: Number(form.purchasePrice) || 0,
           salePrice: Number(form.salePrice) || 0,
           stock: Number(form.stock) || 0,
@@ -147,6 +198,7 @@ export function ProductsView() {
       });
       setDialogOpen(false);
       refetch();
+      refetchCategories();
     } catch (e) {
       toast({
         title: "Erreur",
@@ -166,12 +218,101 @@ export function ProductsView() {
       toast({ title: "Produit supprimé", description: deleting.name });
       setDeleting(null);
       refetch();
+      refetchCategories();
     } catch (e) {
       toast({
         title: "Erreur",
         description: e instanceof Error ? e.message : "Erreur inconnue",
         variant: "destructive",
       });
+    }
+  };
+
+  const onPickImage = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Fichier invalide",
+        description: "Choisissez une image (JPG, PNG, WebP…).",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast({
+        title: "Image trop lourde",
+        description: "Taille maximale : 8 Mo.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setImageBusy(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setForm((f) => ({ ...f, image: dataUrl }));
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Image illisible",
+        variant: "destructive",
+      });
+    } finally {
+      setImageBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const createCategory = async () => {
+    const label = newCategoryLabel.trim();
+    if (!label) {
+      toast({ title: "Saisissez un libellé de catégorie", variant: "destructive" });
+      return;
+    }
+    setCatBusy(true);
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Création impossible");
+      toast({ title: "Catégorie créée", description: json.label });
+      setNewCategoryLabel("");
+      await refetchCategories();
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setCatBusy(false);
+    }
+  };
+
+  const doDeleteCategory = async () => {
+    if (!catToDelete) return;
+    setCatBusy(true);
+    try {
+      const res = await fetch(`/api/categories/${encodeURIComponent(catToDelete)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Suppression impossible");
+      toast({ title: "Catégorie supprimée" });
+      if (category === catToDelete) setCategory("");
+      if (form.category === catToDelete) setForm((f) => ({ ...f, category: "" }));
+      setCatToDelete(null);
+      await refetchCategories();
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setCatBusy(false);
     }
   };
 
@@ -184,15 +325,20 @@ export function ProductsView() {
             Catalogue : sanitaire, plomberie, luminaire, électricité, etc.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Nouveau produit
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => setCatDialogOpen(true)}>
+            <Tags className="h-4 w-4" /> Catégories
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Nouveau produit
+          </Button>
+        </div>
       </div>
 
       {/* Statistiques */}
@@ -238,15 +384,15 @@ export function ProductsView() {
               aria-label="Rechercher un produit"
             />
           </div>
-          <Select value={category} onValueChange={setCategory}>
+          <Select value={category || "all"} onValueChange={(v) => setCategory(v === "all" ? "" : v)}>
             <SelectTrigger className="w-full sm:w-56" aria-label="Filtrer par catégorie">
               <SelectValue placeholder="Toutes les catégories" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Toutes les catégories</SelectItem>
-              {PRODUCT_CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {CATEGORY_LABELS[c]}
+              {categories.map((c) => (
+                <SelectItem key={c.code} value={c.code}>
+                  {c.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -283,10 +429,27 @@ export function ProductsView() {
                 {products.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>
-                      <div className="font-medium">{p.name}</div>
-                      {p.reference && (
-                        <div className="text-xs text-muted-foreground">{p.reference}</div>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        {p.image ? (
+                          <img
+                            src={p.image}
+                            alt={`Photo de ${p.name}`}
+                            className="h-10 w-10 rounded-md object-cover border shrink-0"
+                          />
+                        ) : (
+                          <span className="h-10 w-10 rounded-md border bg-muted/50 flex items-center justify-center shrink-0">
+                            <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-medium truncate max-w-52" title={p.name}>
+                            {p.name}
+                          </div>
+                          {p.reference && (
+                            <div className="text-xs text-muted-foreground">{p.reference}</div>
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <CategoryBadge category={p.category} />
@@ -351,6 +514,55 @@ export function ProductsView() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
+            {/* Image du produit */}
+            <div className="space-y-1.5">
+              <Label>Photo du produit</Label>
+              <div className="flex items-center gap-3">
+                {form.image ? (
+                  <img
+                    src={form.image}
+                    alt="Aperçu du produit"
+                    className="h-20 w-20 rounded-lg object-cover border"
+                  />
+                ) : (
+                  <span className="h-20 w-20 rounded-lg border border-dashed bg-muted/40 flex items-center justify-center">
+                    <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                  </span>
+                )}
+                <div className="space-y-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => onPickImage(e.target.files?.[0])}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={imageBusy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    {imageBusy ? "Traitement…" : "Choisir une image"}
+                  </Button>
+                  {form.image && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setForm((f) => ({ ...f, image: "" }))}
+                    >
+                      <Trash2 className="h-4 w-4" /> Retirer
+                    </Button>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">JPG, PNG… (max 8 Mo)</p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="p-name">Nom du produit *</Label>
               <Input
@@ -377,9 +589,9 @@ export function ProductsView() {
                     <SelectValue placeholder="Choisir…" />
                   </SelectTrigger>
                   <SelectContent className="max-h-64">
-                    {PRODUCT_CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {CATEGORY_LABELS[c]}
+                    {categories.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -457,7 +669,80 @@ export function ProductsView() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmation suppression */}
+      {/* Dialog gestion des catégories */}
+      <Dialog open={catDialogOpen} onOpenChange={(v) => !v && setCatDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tags className="h-5 w-5 text-primary" /> Gestion des catégories
+            </DialogTitle>
+            <DialogDescription>
+              Créez une nouvelle catégorie ou supprimez une catégorie vide.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex gap-2">
+            <Input
+              value={newCategoryLabel}
+              onChange={(e) => setNewCategoryLabel(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && createCategory()}
+              placeholder="Ex : Carrelage"
+              aria-label="Nom de la nouvelle catégorie"
+            />
+            <Button onClick={createCategory} disabled={catBusy || !newCategoryLabel.trim()}>
+              <FolderPlus className="h-4 w-4" /> Créer
+            </Button>
+          </div>
+
+          <div className="rounded-md border max-h-72 overflow-y-auto">
+            <ul className="divide-y">
+              {categories.map((c) => (
+                <li key={c.code} className="flex items-center justify-between gap-2 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {c.productCount === 1
+                        ? "1 produit"
+                        : `${c.productCount ?? 0} produits`}
+                    </p>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => setCatToDelete(c.code)}
+                    aria-label={`Supprimer la catégorie ${c.label}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation suppression catégorie */}
+      <Dialog open={catToDelete !== null} onOpenChange={(v) => !v && setCatToDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Supprimer la catégorie ?</DialogTitle>
+            <DialogDescription>
+              La suppression échouera si des produits utilisent encore cette catégorie.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCatToDelete(null)}>
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={doDeleteCategory} disabled={catBusy}>
+              {catBusy ? "Suppression…" : "Supprimer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation suppression produit */}
       <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>

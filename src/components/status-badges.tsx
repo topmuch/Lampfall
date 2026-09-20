@@ -3,11 +3,12 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  CATEGORY_LABELS,
   DELIVERY_LABELS,
   ORDER_STATUS_LABELS,
   PAYMENT_LABELS,
+  RENT_STATUS_LABELS,
 } from "@/lib/constants";
+import { prettifyCode, useCategories } from "@/components/categories-provider";
 
 export function PaymentBadge({ status }: { status: string }) {
   const label = PAYMENT_LABELS[status] ?? status;
@@ -56,10 +57,26 @@ export function OrderStatusBadge({ status }: { status: string }) {
 }
 
 export function CategoryBadge({ category }: { category: string | null | undefined }) {
+  const { labels } = useCategories();
   if (!category) return <span className="text-muted-foreground text-xs">—</span>;
-  const label = CATEGORY_LABELS[category] ?? category;
+  const label = labels[category] ?? prettifyCode(category);
   return (
     <Badge variant="outline" className="border-green-200 text-green-800 bg-green-50/50">
+      {label}
+    </Badge>
+  );
+}
+
+export function RentStatusBadge({ status }: { status: string }) {
+  const label = RENT_STATUS_LABELS[status] ?? status;
+  return (
+    <Badge
+      className={cn(
+        status === "PAYE"
+          ? "bg-green-100 text-green-800 hover:bg-green-100 border-green-200"
+          : "bg-red-100 text-red-700 hover:bg-red-100 border-red-200"
+      )}
+    >
       {label}
     </Badge>
   );
