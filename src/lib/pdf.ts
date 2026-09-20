@@ -5,7 +5,6 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Invoice, Order, Purchase, Client, Tenant, Rent } from "./types";
 import {
-  COMPANY,
   DELIVERY_LABELS,
   ORDER_STATUS_LABELS,
   PAYMENT_LABELS,
@@ -98,12 +97,72 @@ export function amountInWordsFCFA(amount: number): string {
   return `${parts.join(" ")} francs CFA`;
 }
 
+// ─── Paramètres société (injectés depuis l'écran Paramètres) ────────────────
+
+interface CompanyInfo {
+  name: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  email: string;
+  rc: string;
+  ninea: string;
+  logo: string | null;
+}
+
+let companyInfo: CompanyInfo = {
+  name: "ETS LAMP FALL",
+  tagline: "Plomberie - Sanitaire - Luminaire",
+  address: "Dakar, Sénégal",
+  phone: "+221 77 000 00 00",
+  email: "contact@etslampfall.sn",
+  rc: "",
+  ninea: "",
+  logo: null,
+};
+
+let companyLoaded = false;
+
+/** Charge les paramètres société depuis l'API (une fois par session, sauf force). */
+export async function loadCompanyInfo(force = false): Promise<CompanyInfo> {
+  if (companyLoaded && !force) return companyInfo;
+  try {
+    const res = await fetch("/api/settings");
+    if (res.ok) {
+      const s = await res.json();
+      companyInfo = {
+        name: (s.nomSociete || companyInfo.name).toString(),
+        tagline: (s.tagline || "").toString(),
+        address: (s.adresse || "").toString(),
+        phone: (s.telephone || "").toString(),
+        email: (s.email || "").toString(),
+        rc: (s.rc || "").toString(),
+        ninea: (s.ninea || "").toString(),
+        logo: s.logo ? s.logo.toString() : null,
+      };
+    }
+  } catch {
+    /* valeurs par défaut */
+  }
+  companyLoaded = true;
+  return companyInfo;
+}
+
+/** Force le rechargement des paramètres société (après enregistrement). */
+export function invalidateCompanyCache() {
+  companyLoaded = false;
+  logoCache = undefined;
+}
+
 // ─── Logo ───────────────────────────────────────────────────────────────────
 
-let logoCache: string | null = null;
+let logoCache: string | null | undefined = undefined; // undefined = pas encore chargé
 
+/** Logo actif : logo des paramètres s'il existe, sinon /logo.png par défaut. */
 export async function getLogoBase64(): Promise<string | null> {
-  if (logoCache) return logoCache;
+  const info = await loadCompanyInfo();
+  if (info.logo) return info.logo;
+  if (logoCache !== undefined) return logoCache;
   try {
     const res = await fetch("/logo.png");
     const blob = await res.blob();
@@ -114,7 +173,7 @@ export async function getLogoBase64(): Promise<string | null> {
       reader.readAsDataURL(blob);
     });
   } catch {
-    return null;
+    logoCache = null;
   }
   return logoCache;
 }
@@ -122,14 +181,16 @@ export async function getLogoBase64(): Promise<string | null> {
 // ─── Helpers de dessin ──────────────────────────────────────────────────────
 
 function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: string) {
+  const company = companyInfo;
   // Bandeau vert fin en haut
   doc.setFillColor(...GREEN);
   doc.rect(0, 0, 210, 3, "F");
 
-  // Logo
+  // Logo (format déduit de la data-URL : PNG ou JPEG)
   if (logo) {
     try {
-      doc.addImage(logo, "PNG", 14, 8, 30, 25.6);
+      const fmt = logo.includes("image/png") ? "PNG" : "JPEG";
+      doc.addImage(logo, fmt, 14, 8, 30, 25.6);
     } catch {
       /* ignore */
     }
@@ -140,15 +201,32 @@ function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: st
   doc.setTextColor(...DARK);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text(COMPANY.name, xText, 15);
+  doc.text(company.name, xText, 15);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...GREEN);
-  doc.text(COMPANY.tagline, xText, 20);
+  if (company.tagline) doc.text(company.tagline, xText, 20);
   doc.setTextColor(...GRAY);
-  doc.text(COMPANY.address, xText, 24.5);
-  doc.text(`Tél : ${COMPANY.phone}`, xText, 28.5);
-  doc.text(COMPANY.email, xText, 32.5);
+  let hy = company.tagline ? 24.5 : 20.5;
+  if (company.address) {
+    doc.text(company.address, xText, hy);
+    hy += 4;
+  }
+  if (company.phone) {
+    doc.text(`Tél : ${company.phone}`, xText, hy);
+    hy += 4;
+  }
+  if (company.email) {
+    doc.text(company.email, xText, hy);
+    hy += 4;
+  }
+  if (company.rc || company.ninea) {
+    const legal = [company.rc ? `RC : ${company.rc}` : "", company.ninea ? `NINEA : ${company.ninea}` : ""]
+      .filter(Boolean)
+      .join("  •  ");
+    doc.setFontSize(7.5);
+    doc.text(legal, xText, hy);
+  }
 
   // Titre à droite
   doc.setTextColor(...GREEN);
@@ -169,6 +247,10 @@ function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: st
 }
 
 function drawFooter(doc: jsPDF) {
+  const company = companyInfo;
+  const legal = [company.rc ? `RC : ${company.rc}` : "", company.ninea ? `NINEA : ${company.ninea}` : ""]
+    .filter(Boolean)
+    .join(" • ");
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -177,14 +259,18 @@ function drawFooter(doc: jsPDF) {
     doc.setLineWidth(0.4);
     doc.line(14, y - 4, 196, y - 4);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    doc.setFontSize(7);
     doc.setTextColor(...GRAY);
-    doc.text(
-      `${COMPANY.name} • ${COMPANY.tagline} • Tél : ${COMPANY.phone} • ${COMPANY.email}`,
-      105,
-      y,
-      { align: "center" }
-    );
+    const line1 = [
+      company.name,
+      company.tagline,
+      company.phone ? `Tél : ${company.phone}` : "",
+      company.email,
+      legal,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+    doc.text(line1, 105, y, { align: "center" });
     doc.text("Merci de votre confiance !", 105, y + 3.5, { align: "center" });
     doc.text(`Page ${i}/${pageCount}`, 196, y, { align: "right" });
   }

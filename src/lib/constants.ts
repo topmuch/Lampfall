@@ -114,6 +114,18 @@ export function formatMoney(value: number | null | undefined): string {
   return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n)} ${CURRENCY}`;
 }
 
+/** Format compact pour les indicateurs : 2,49 M FCFA · 829 k FCFA */
+export function formatMoneyCompact(value: number | null | undefined): string {
+  const n = value ?? 0;
+  if (Math.abs(n) >= 1_000_000) {
+    return `${(n / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} M ${CURRENCY}`;
+  }
+  if (Math.abs(n) >= 100_000) {
+    return `${Math.round(n / 1000).toLocaleString("fr-FR")} k ${CURRENCY}`;
+  }
+  return formatMoney(n);
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;

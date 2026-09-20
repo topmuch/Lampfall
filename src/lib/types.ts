@@ -141,6 +141,8 @@ export interface Order {
 }
 
 export interface DashboardStats {
+  year: number;
+  month: string;
   invoiceCount: number;
   proformaCount: number;
   clientCount: number;
@@ -151,7 +153,44 @@ export interface DashboardStats {
   purchaseTotal: number;
   pendingOrders: number;
   lowStock: Product[];
-  monthlyRevenue: { month: string; total: number; paid: number }[];
+  monthlyRevenue: { month: string; monthKey: string; total: number; paid: number }[];
+  dailyRevenue: { day: number; total: number; count: number }[];
+  tranches: { label: string; count: number; total: number }[];
+  topClients: { name: string; total: number }[];
   recentInvoices: Invoice[];
-  topCategories: { category: string; total: number }[];
+  topCategories: { category: string; label: string; total: number }[];
+}
+
+// ─── Paramètres société ─────────────────────────────────────────────────────
+
+export interface Settings {
+  id: string;
+  nomSociete: string;
+  tagline: string;
+  adresse: string;
+  telephone: string;
+  email: string;
+  rc: string;
+  ninea: string;
+  logo?: string | null;
+  updatedAt?: string;
+}
+
+// ─── Utilisateurs ───────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  name: string;
+  role: "ADMIN" | "EMPLOYE";
+}
+
+export interface UserRecord {
+  id: string;
+  username: string;
+  name: string;
+  role: "ADMIN" | "EMPLOYE";
+  actif: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

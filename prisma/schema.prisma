@@ -173,3 +173,31 @@ model Rent {
 
   @@unique([tenantId, month])
 }
+
+// ─── Paramètres société (injectés dans les factures) ────────────────────────
+
+model Setting {
+  id          String  @id @default("main")
+  nomSociete  String  @default("ETS LAMP FALL")
+  tagline     String  @default("Plomberie - Sanitaire - Luminaire")
+  adresse     String  @default("Dakar, Sénégal")
+  telephone   String  @default("+221 77 000 00 00")
+  email       String  @default("contact@etslampfall.sn")
+  rc          String  @default("")
+  ninea       String  @default("")
+  logo        String? // data-URL du logo personnalisé
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Utilisateurs (admin / employés) ────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  name         String
+  password     String // hash scrypt : sel:clé
+  role         String   @default("EMPLOYE") // ADMIN | EMPLOYE
+  actif        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
