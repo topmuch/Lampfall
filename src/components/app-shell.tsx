@@ -68,18 +68,24 @@ const NAV: {
   label: string;
   short: string;
   icon: React.ComponentType<{ className?: string }>;
+  section: string;
   adminOnly?: boolean;
 }[] = [
-  { id: "dashboard", label: "Tableau de bord", short: "Dashboard", icon: LayoutDashboard },
-  { id: "factures", label: "Factures", short: "Factures", icon: FileText },
-  { id: "proforma", label: "Factures proforma", short: "Proforma", icon: FileSignature },
-  { id: "commandes", label: "Commandes prévisionnelles", short: "Commandes", icon: ClipboardList },
-  { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag },
-  { id: "clients", label: "Clients", short: "Clients", icon: Users2 },
-  { id: "produits", label: "Produits & stock", short: "Produits", icon: Package },
-  { id: "immo", label: "Immobilier — Loyers", short: "Immo", icon: Building2 },
-  { id: "utilisateurs", label: "Utilisateurs & rôles", short: "Utilisateurs", icon: ShieldCheck, adminOnly: true },
-  { id: "parametres", label: "Paramètres société", short: "Paramètres", icon: SettingsIcon, adminOnly: true },
+  // ─── Pilotage ───
+  { id: "dashboard", label: "Tableau de bord", short: "Dashboard", icon: LayoutDashboard, section: "Pilotage" },
+  // ─── Ventes ───
+  { id: "factures", label: "Factures", short: "Factures", icon: FileText, section: "Ventes" },
+  { id: "proforma", label: "Factures proforma", short: "Proforma", icon: FileSignature, section: "Ventes" },
+  { id: "commandes", label: "Commandes prévisionnelles", short: "Commandes", icon: ClipboardList, section: "Ventes" },
+  { id: "clients", label: "Clients", short: "Clients", icon: Users2, section: "Ventes" },
+  // ─── Achats & stock ───
+  { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag, section: "Achats & stock" },
+  { id: "produits", label: "Produits & stock", short: "Produits", icon: Package, section: "Achats & stock" },
+  // ─── Immobilier ───
+  { id: "immo", label: "Immobilier — Loyers", short: "Immo", icon: Building2, section: "Immobilier" },
+  // ─── Administration (admin uniquement) ───
+  { id: "utilisateurs", label: "Utilisateurs & rôles", short: "Utilisateurs", icon: ShieldCheck, section: "Administration", adminOnly: true },
+  { id: "parametres", label: "Paramètres société", short: "Paramètres", icon: SettingsIcon, section: "Administration", adminOnly: true },
 ];
 
 function NavItems({
@@ -94,29 +100,49 @@ function NavItems({
   className?: string;
 }) {
   const items = NAV.filter((item) => !item.adminOnly || isAdmin);
+  // Regroupe les onglets par section, en conservant l'ordre déclaré dans NAV
+  const sections: { title: string; items: typeof NAV }[] = [];
+  for (const item of items) {
+    const last = sections[sections.length - 1];
+    if (last && last.title === item.section) {
+      last.items.push(item);
+    } else {
+      sections.push({ title: item.section, items: [item] });
+    }
+  }
   return (
-    <nav className={cn("space-y-1", className)} aria-label="Navigation principale">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const isActive = active === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onSelect(item.id)}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all text-left",
-              isActive
-                ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md font-bold nav-luxe-active"
-                : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-            aria-current={isActive ? "page" : undefined}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{item.short}</span>
-          </button>
-        );
-      })}
+    <nav className={cn("space-y-4", className)} aria-label="Navigation principale">
+      {sections.map((section) => (
+        <div key={section.title}>
+          <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/45">
+            {section.title}
+          </p>
+          <div className="space-y-1">
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = active === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelect(item.id)}
+                  title={item.label}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all text-left",
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md font-bold nav-luxe-active"
+                      : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{item.short}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }
