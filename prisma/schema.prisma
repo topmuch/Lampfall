@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Clients ────────────────────────────────────────────────────────────────
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  type      String   @default("PARTICULIER") // PARTICULIER | ENTREPRISE
+  notes     String?
+  createdAt DateTime @default(now())
+
+  invoices Invoice[]
+  orders   Order[]
+}
+
+// ─── Produits (catalogue) ───────────────────────────────────────────────────
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  reference     String?
+  category      String // SANITAIRE | PLOMBERIE | LUMINAIRE | ELECTRICITE | GOUTTE_A_GOUTTE | TUYAUTERIE | MIROITERIE | ROBINETTERIE | POMPE | CHASSE_DOUCHE | RESERVOIR_EAU
+  purchasePrice Float    @default(0)
+  salePrice     Float    @default(0)
+  stock         Int      @default(0)
+  unit          String   @default("pièce")
+  minStock      Int      @default(0)
+  createdAt     DateTime @default(now())
+}
+
+// ─── Factures (vente + proforma) ────────────────────────────────────────────
+
+model Invoice {
+  id             String    @id @default(cuid())
+  number         String    @unique
+  type           String    @default("VENTE") // VENTE | PROFORMA
+  clientId       String?
+  client         Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientName     String    @default("")
+  clientPhone    String?
+  clientAddress  String?
+  date           DateTime  @default(now())
+  dueDate        DateTime?
+  deliveryStatus String    @default("NON_LIVRE") // LIVRE | NON_LIVRE
+  paymentStatus  String    @default("NON_PAYE") // PAYE | PARTIEL | NON_PAYE
+  amountPaid     Float     @default(0)
+  taxRate        Float     @default(18)
+  totalHT        Float     @default(0)
+  totalTTC       Float     @default(0)
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  items InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String
+  category    String?
+  unit        String  @default("pièce")
+  quantity    Float
+  unitPrice   Float
+  total       Float
+}
+
+// ─── Factures d'achat (fournisseurs, avec pièce jointe) ─────────────────────
+
+model Purchase {
+  id         String   @id @default(cuid())
+  number     String
+  supplier   String
+  date       DateTime @default(now())
+  total      Float    @default(0)
+  fileName   String?
+  fileType   String?
+  fileSize   Int?
+  fileStored String?
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  items PurchaseItem[]
+}
+
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String
+  quantity    Float
+  unitPrice   Float
+  total       Float
+}
+
+// ─── Commandes prévisionnelles ──────────────────────────────────────────────
+
+model Order {
+  id           String    @id @default(cuid())
+  number       String    @unique
+  clientId     String?
+  client       Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientName   String    @default("")
+  date         DateTime  @default(now())
+  deliveryDate DateTime?
+  status       String    @default("EN_COURS") // EN_COURS | CONFIRMEE | LIVREE | ANNULEE
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  items OrderItem[]
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String
+  category    String?
+  unit        String  @default("pièce")
+  quantity    Float
+  unitPrice   Float
+  total       Float
+}
