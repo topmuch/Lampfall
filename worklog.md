@@ -240,3 +240,19 @@ Work Log:
 Stage Summary:
 - Les 14 fonctionnalités du lot sont livrées et vérifiées de bout en bout : relances & envoi WhatsApp/email, marges (rapport UI+PDF), état TVA PDF, bons de livraison, versements multiples avec historique, répertoire fournisseurs avec historique d'achats, journal de stock (ventes/achats/ajustements/initial), bon de réappro PDF, plafond de crédit avec alerte, stats client enrichies, sauvegarde/restauration JSON, journal d'audit admin, comparaison N-1 (dashboard + rapports).
 - Nouveaux artefacts : modèles Payment/Supplier/StockMovement/AuditLog (+creditLimit/supplierId/purchasePrice), 8 nouvelles routes API, 5 nouveaux composants, 3 nouveaux PDF, prisma/backfill.ts.
+
+---
+Task ID: 6
+Agent: Z.ai Code (orchestrateur)
+Task: Synchronisation GitHub + préparation déploiement Coolify (adaptation du Dockerfile QRBag, sans modifier le projet)
+
+Work Log:
+- Diagnostic git : 149 fichiers signalés « modifiés » = 0 insertion / 0 suppression → uniquement des changements de permissions (100644→100755) dus à la restauration du sandbox ; corrigé via `git config core.fileMode false` (config locale uniquement, aucun fichier projet modifié). GitHub était déjà à jour (aucun commit en avance).
+- Analyse du projet pour le Docker : `next.config.ts` a déjà `output: "standalone"` (le build copie `.next/static` + `public` dans standalone via le script build) ; auth maison avec `AUTH_SECRET` fallback intégré (aucune variable d'environnement obligatoire) ; `db/` et `upload/` ignorés par git → base vierge au premier démarrage ; `prisma/seed-v3.ts` idempotent (paramètres société + admin/admin123).
+- Constat : les pièces jointes d'achats sont stockées dans `db/uploads` (process.cwd()) → documenté dans les notes de volumes Coolify.
+- Écrit du `Dockerfile` à la racine, adapté du modèle QRBag avec 4 seules modifications : titre (ETS LAMP FALL), URL de clone (topmuch/Lampfall.git), nom de la base SQLite (/app/data/lampfall.db), création admin via `bun prisma/seed-v3.ts` (équivalent idempotent de create-admin.cjs).
+
+Stage Summary:
+- GitHub `topmuch/Lampfall` synchronisé avec la version locale (tête 4093b74 puis commit Dockerfile).
+- `Dockerfile` Coolify prêt à la racine : clone du dépôt → bun install → prisma generate → bun run build (standalone) → au démarrage : prisma db push + seed admin/admin123 + node .next/standalone/server.js sur 0.0.0.0:3000.
+- Volume persistant requis : /app/data (base SQLite). Optionnel : /app/db (pièces jointes des achats).
