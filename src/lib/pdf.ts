@@ -164,7 +164,7 @@ export async function getLogoBase64(): Promise<string | null> {
   if (info.logo) return info.logo;
   if (logoCache !== undefined) return logoCache;
   try {
-    const res = await fetch("/logo-violet.png");
+    const res = await fetch("/logo-green.png");
     const blob = await res.blob();
     logoCache = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();

@@ -15,7 +15,7 @@ function useMounted() {
 }
 
 /**
- * Bouton sombre/clair version luxueuse : pilule à dégradé violet & or,
+ * Bouton sombre/clair version luxueuse : pilule à dégradé vert & or,
  * poignée dorée qui glisse, icônes animées.
  */
 export function ThemeToggle() {

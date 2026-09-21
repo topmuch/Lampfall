@@ -79,7 +79,7 @@ function rangeFor(preset: Preset): { from: string; to: string } | null {
 // ─── Composants graphiques ──────────────────────────────────────────────────
 
 const BAR_TONES = {
-  violet: "bg-gradient-to-t from-violet-600 to-fuchsia-400",
+  green: "bg-gradient-to-t from-green-700 to-emerald-500",
   amber: "bg-gradient-to-t from-amber-500 to-orange-400",
   teal: "bg-gradient-to-t from-teal-500 to-emerald-400",
 } as const;
@@ -125,12 +125,12 @@ function HBar({
   value: number;
   max: number;
   display: string;
-  tone: "violet" | "amber" | "teal";
+  tone: "green" | "amber" | "teal";
   title?: string;
 }) {
   const w = max > 0 ? Math.max(2, (value / max) * 100) : 0;
   const gradients = {
-    violet: "bg-gradient-to-r from-violet-500 to-fuchsia-500",
+    green: "bg-gradient-to-r from-green-600 to-emerald-500",
     amber: "bg-gradient-to-r from-amber-500 to-orange-500",
     teal: "bg-gradient-to-r from-teal-500 to-emerald-500",
   };
@@ -164,7 +164,7 @@ function MiniStat({ title, value, alert }: { title: string; value: string; alert
 }
 
 const KPI_TONES = {
-  violet: "bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-violet-500/30",
+  green: "bg-gradient-to-br from-green-600 to-emerald-700 text-white shadow-green-600/30",
   teal: "bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-teal-500/30",
   rose: "bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-rose-500/30",
   amber: "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30",
@@ -451,7 +451,7 @@ export function ReportsView() {
               title="CA TTC"
               value={formatMoneyCompact(summary.totalTTC)}
               icon={TrendingUp}
-              tone="violet"
+              tone="green"
               footer={
                 ttcDelta !== null ? (
                   <p
@@ -509,7 +509,7 @@ export function ReportsView() {
                       value={m.total}
                       max={maxMonthly}
                       display={formatMoneyCompact(m.total)}
-                      tone="violet"
+                      tone="green"
                     />
                   ))}
                 </div>
@@ -531,7 +531,7 @@ export function ReportsView() {
                     value={c.total}
                     max={maxClient}
                     display={formatMoneyCompact(c.total)}
-                    tone="violet"
+                    tone="green"
                   />
                 ))}
               </CardContent>

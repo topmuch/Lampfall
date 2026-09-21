@@ -171,7 +171,7 @@ function CompanyLogo({ size = 40 }: { size?: number }) {
   }
   return (
     <Image
-      src="/logo-violet.png"
+      src="/logo-green.png"
       alt="Logo Lampe Fall"
       width={size}
       height={Math.round(size * 0.854)}
@@ -272,7 +272,7 @@ function UserMenu({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
             aria-label="Menu du compte"
           >
             <span
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-xs font-bold text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-green-600 to-emerald-500 text-xs font-bold text-white"
               aria-hidden
             >
               {initials}

@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     "proforma",
   ],
   icons: {
-    icon: "/logo-violet.png",
+    icon: "/logo-green.png",
   },
 };
 

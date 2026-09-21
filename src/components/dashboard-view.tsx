@@ -40,7 +40,7 @@ const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 // Couleurs des pastilles KPI (façon dashboard premium)
 const TONES = {
-  violet: "bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-violet-500/30",
+  green: "bg-gradient-to-br from-green-600 to-emerald-700 text-white shadow-green-600/30",
   rose: "bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-rose-500/30",
   amber: "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30",
   teal: "bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-teal-500/30",
@@ -139,10 +139,10 @@ function VBar({
 function calendarCellClass(total: number, max: number): string {
   if (total <= 0) return "bg-muted/50 text-muted-foreground";
   const ratio = total / max;
-  if (ratio > 0.75) return "bg-violet-600 text-white font-bold shadow-violet-600/40 shadow-md";
-  if (ratio > 0.5) return "bg-violet-500/85 text-white";
-  if (ratio > 0.25) return "bg-violet-400/70 text-white";
-  if (ratio > 0.1) return "bg-violet-300/60 text-violet-950";
+  if (ratio > 0.75) return "bg-green-700 text-white font-bold shadow-green-700/40 shadow-md";
+  if (ratio > 0.5) return "bg-green-600/85 text-white";
+  if (ratio > 0.25) return "bg-green-500/70 text-white";
+  if (ratio > 0.1) return "bg-green-400/60 text-green-950";
   return "bg-gold-soft text-foreground";
 }
 
@@ -206,9 +206,9 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
       : "";
 
   const trancheColors = [
-    "bg-gradient-to-r from-violet-600 to-violet-400",
-    "bg-gradient-to-r from-purple-600 to-purple-400",
-    "bg-gradient-to-r from-fuchsia-600 to-fuchsia-400",
+    "bg-gradient-to-r from-green-700 to-green-500",
+    "bg-gradient-to-r from-emerald-700 to-emerald-500",
+    "bg-gradient-to-r from-teal-600 to-teal-400",
     "bg-gradient-to-r from-pink-600 to-pink-400",
     "bg-gradient-to-r from-rose-600 to-rose-400",
   ];
@@ -275,7 +275,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
             )}
           </div>
           <div className="flex w-24 justify-end">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/30">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-green-700 to-emerald-600 text-white shadow-lg shadow-green-700/30">
               <TrendingUp className="h-4.5 w-4.5" aria-hidden />
             </div>
           </div>
@@ -284,7 +284,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
 
       {/* Cartes KPI principales */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard title="Total Revenu" value={formatMoneyCompact(stats.revenueTotal)} icon={Wallet} tone="violet" />
+        <KpiCard title="Total Revenu" value={formatMoneyCompact(stats.revenueTotal)} icon={Wallet} tone="green" />
         <KpiCard title="Nombre Factures" value={String(stats.invoiceCount)} icon={FileText} tone="rose" />
         <KpiCard title="Nombre Clients" value={String(stats.clientCount)} icon={Users} tone="amber" />
         <KpiCard
@@ -376,13 +376,13 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
                 <span className="h-2.5 w-2.5 rounded-sm bg-muted/60 border" /> Aucun CA
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-violet-300/60" /> Faible
+                <span className="h-2.5 w-2.5 rounded-sm bg-green-400/60" /> Faible
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-violet-500/85" /> Moyen
+                <span className="h-2.5 w-2.5 rounded-sm bg-green-600/85" /> Moyen
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-violet-600" /> Élevé
+                <span className="h-2.5 w-2.5 rounded-sm bg-green-700" /> Élevé
               </span>
             </div>
           </CardContent>

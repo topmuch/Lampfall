@@ -216,7 +216,7 @@ export function UsersView({ currentUser }: { currentUser: AuthUser }) {
                           <div
                             className={`flex h-8 w-8 items-center justify-center rounded-full text-white text-xs font-bold ${
                               u.role === "ADMIN"
-                                ? "bg-gradient-to-br from-primary to-fuchsia-500"
+                                ? "bg-gradient-to-br from-primary to-emerald-500"
                                 : "bg-muted-foreground/70"
                             }`}
                             aria-hidden

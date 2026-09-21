@@ -273,3 +273,21 @@ Stage Summary:
 - Logo ETS LAMP FALL désormais violet (harmonisé au thème luxe violet), design strictement inchangé.
 - Nouveau fichier public/logo-violet.png référencé partout (app + favicon + PDF) ; logo.png et logo_small.png également recolorés par cohérence.
 - Pour les déploiements : si un logo personnalisé est uploadé dans Paramètres, il prime sur le logo par défaut (comportement inchangé).
+
+---
+Task ID: 8
+Agent: Z.ai Code (orchestrateur)
+Task: Correction — harmoniser le SITE avec le logo (site vert, logo vert conservé ; annule l'inversion précédente)
+
+Work Log:
+- Mal entenda la demande Task 7 : le logo est revenu à sa version verte d'origine (git checkout 9861348 -- public/logo.png public/logo_small.png ; suppression de logo-violet.png) et NOUVEAU nom d'actif public/logo-green.png (anti-cache) référencé aux 6 endroits (login ×2, app-shell, settings-view, favicon, pdf.ts).
+- Couleurs extraites du logo : vert foncé #006030 = oklch(0.429 0.111 152.8), vert moyen #509058 = oklch(0.595 0.107 146.9).
+- globals.css entièrement converti violet→vert : --primary clair oklch(0.43 0.11 153) / sombre oklch(0.72 0.13 153) (teinte 153 = celle du logo), fond/cards/sidebar/borders/muted/accent/ring repassés sur teintes 153-155, chromas réduits (le vert sature moins que le violet), scrollbars, text-luxe-gradient, luxe-banner, card-luxe, theme-toggle-luxe, shadow-luxe ; accents OR conservés (identité « luxe vert & or ») ; graphiques : chart-1 vert, autres teintes distinctes conservées.
+- Composants : KPI tone « violet » renommé « green » (dashboard-view + reports-view, ton, union de type et 3 usages tone=), barres de plafond crédit violet-300..600 → green-400..700, dégradés graphiques violet/purple/fuchsia → green/emerald/teal, avatars (app-shell, users-view) → green/emerald. 0 occurrence violet/purple/fuchsia restante hors lib shadcn.
+- Debug : le serveur servait un chunk CSS Turbopack périmé malgré les redémarrages → résolu par rm -rf .next + restart (recompilation complète).
+- Vérifié via agent-browser : login (bannière verte, bouton vert, logo vert), dashboard clair (sidebar vert profond, titres dégradé vert→or), mode sombre (fond et cartes verdâtres, contraste OK). Lint 0 erreur.
+
+Stage Summary:
+- Le site est désormais entièrement harmonisé au logo VERT d'origine (clair ET sombre), accents dorés conservés.
+- Anti-cache par nouveau nom d'actif (logo-green.png) ; l'ancien /logo.png (vert) reste dans public/ pour tout usage externe.
+- Note infra : cache Turbopack persistant dans .next peut servir du CSS périmé après édition massive de globals.css → rm -rf .next si besoin.

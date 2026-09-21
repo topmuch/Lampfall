@@ -39,7 +39,7 @@ export function LoginView({ settings, onSuccess }: { settings: Settings | null; 
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
-      {/* Halos décoratifs violet & or */}
+      {/* Halos décoratifs vert & or */}
       <div aria-hidden className="pointer-events-none absolute -top-32 -left-32 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-40 -right-24 h-[28rem] w-[28rem] rounded-full bg-gold/20 blur-3xl" />
 
@@ -51,7 +51,7 @@ export function LoginView({ settings, onSuccess }: { settings: Settings | null; 
                
               <img src={settings.logo} alt={`Logo ${settings.nomSociete}`} className="h-24 w-24 object-contain" />
             ) : (
-              <Image src="/logo-violet.png" alt="Logo Lampe Fall" width={96} height={96} className="h-24 w-auto object-contain" />
+              <Image src="/logo-green.png" alt="Logo Lampe Fall" width={96} height={96} className="h-24 w-auto object-contain" />
             )}
           </div>
           <div className="text-center">
@@ -84,7 +84,7 @@ export function LoginView({ settings, onSuccess }: { settings: Settings | null; 
                  
                 <img src={settings.logo} alt="" className="h-14 w-14 object-contain" />
               ) : (
-                <Image src="/logo-violet.png" alt="" width={56} height={56} className="h-14 w-auto object-contain" />
+                <Image src="/logo-green.png" alt="" width={56} height={56} className="h-14 w-auto object-contain" />
               )}
             </div>
             <p className="font-bold text-lg text-luxe-gradient">{settings?.nomSociete ?? "LAMPE FALL"}</p>
