@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
+  Download,
   Loader2,
   Plus,
+  Receipt,
   Store,
   Trash2,
   Wallet,
@@ -37,13 +39,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
 import { authFetch } from "@/lib/auth-client";
 import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants";
 import { Search } from "lucide-react";
 import { PaymentBadge } from "@/components/status-badges";
-import type { CreditPayment, CreditPurchase } from "@/lib/types";
+import { TicketPreviewDialog } from "@/components/ticket-preview-dialog";
+import { saveOrOpenInvoicePDF } from "@/lib/pdf";
+import type { CreditPayment, CreditPurchase, Invoice } from "@/lib/types";
 
 function todayISO(): string {
   const d = new Date();
@@ -88,6 +93,8 @@ function CreditPaymentsDialog({
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Aperçu du ticket 80 mm pour un règlement crédit
+  const [ticket, setTicket] = useState<{ payment: CreditPayment; purchase: CreditPurchase } | null>(null);
 
   const total = current?.total ?? purchase?.total ?? 0;
   const paid = current?.amountPaid ?? purchase?.amountPaid ?? 0;
@@ -156,6 +163,9 @@ function CreditPaymentsDialog({
         title: "Versement enregistré",
         description: `${formatMoney(value)} — ${PAYMENT_METHOD_LABELS[method] ?? method}`,
       });
+      // Ouvre directement l'aperçu du ticket 80 mm du règlement enregistré
+      const saved = json.payment as CreditPayment | undefined;
+      if (saved) setTicket({ payment: saved, purchase: (json.purchase as CreditPurchase) ?? purchase });
     } catch (e) {
       toast({
         title: "Erreur",
@@ -279,6 +289,17 @@ function CreditPaymentsDialog({
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setTicket({ payment: p, purchase: current ?? purchase! })}
+                        disabled={deletingId === p.id}
+                        aria-label={`Afficher le ticket 80 mm du versement du ${formatDate(p.paidAt)}`}
+                        title="Aperçu du ticket 80 mm"
+                      >
+                        <Receipt className="h-4 w-4" aria-hidden />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                         onClick={() => removePayment(p)}
                         disabled={deletingId === p.id}
@@ -360,6 +381,23 @@ function CreditPaymentsDialog({
           </div>
         )}
       </DialogContent>
+
+      {/* Aperçu du reçu de versement — ticket 80 mm (règlement crédit) */}
+      <TicketPreviewDialog
+        open={ticket !== null}
+        onOpenChange={(v) => !v && setTicket(null)}
+        payment={ticket?.payment ?? null}
+        doc={
+          ticket
+            ? {
+                number: ticket.purchase.number,
+                clientName: ticket.purchase.tier,
+                totalTTC: ticket.purchase.total,
+                amountPaid: ticket.purchase.amountPaid,
+              }
+            : null
+        }
+      />
     </Dialog>
   );
 }
@@ -379,6 +417,30 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
   const [paymentsFor, setPaymentsFor] = useState<CreditPurchase | null>(null);
   const [deleting, setDeleting] = useState<CreditPurchase | null>(null);
   const [busy, setBusy] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  /** Télécharge la facture PDF d'origine une fois l'achat à crédit payé. */
+  const downloadInvoicePDF = async (p: CreditPurchase) => {
+    setDownloadingId(p.id);
+    try {
+      const res = await authFetch(`/api/invoices/${p.sourceId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Facture introuvable");
+      await saveOrOpenInvoicePDF(json as Invoice, "download");
+      toast({
+        title: "Facture téléchargée",
+        description: `PDF de ${json.number} enregistré.`,
+      });
+    } catch (e) {
+      toast({
+        title: "Erreur PDF",
+        description: e instanceof Error ? e.message : "Téléchargement de la facture impossible",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     const list = purchases ?? [];
@@ -527,7 +589,15 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
                     return (
                       <TableRow key={p.id}>
                         <TableCell>
-                          <p className="font-semibold">{p.number}</p>
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              className="gap-0.5 border-gold/50 bg-gold-soft/60 px-1.5 py-0 text-[10px] font-bold text-amber-800 hover:bg-gold-soft/60 dark:text-amber-300"
+                              title="Achat à crédit"
+                            >
+                              <Wallet className="h-3 w-3" aria-hidden /> Crédit
+                            </Badge>
+                          </div>
+                          <p className="mt-1 font-semibold">{p.number}</p>
                           <p className="text-xs text-muted-foreground">
                             {SOURCE_LABELS[p.sourceType] ?? p.sourceType}
                             {p.note ? ` — ${p.note}` : ""}
@@ -552,26 +622,45 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
                           <PaymentBadge status={statusOf(p)} />
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setPaymentsFor(p)}
-                            aria-label={`Versements pour ${p.number}`}
-                            title="Versements"
-                          >
-                            <Wallet className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => setDeleting(p)}
-                            aria-label={`Annuler le transfert de ${p.number}`}
-                            title="Annuler le transfert"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setPaymentsFor(p)}
+                              aria-label={`Versements pour ${p.number}`}
+                              title="Versements"
+                            >
+                              <Wallet className="h-4 w-4" />
+                            </Button>
+                            {statusOf(p) === "PAYE" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-700 hover:text-green-800"
+                                onClick={() => downloadInvoicePDF(p)}
+                                disabled={downloadingId === p.id}
+                                aria-label={`Télécharger la facture PDF de ${p.number}`}
+                                title="Facture payée — télécharger le PDF"
+                              >
+                                {downloadingId === p.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                                ) : (
+                                  <Download className="h-4 w-4" aria-hidden />
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleting(p)}
+                              aria-label={`Annuler le transfert de ${p.number}`}
+                              title="Annuler le transfert"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

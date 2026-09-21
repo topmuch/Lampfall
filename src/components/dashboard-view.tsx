@@ -1,30 +1,44 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   AlertTriangle,
-  CalendarDays,
+  Building2,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
+  CreditCard,
   Download,
   FileText,
+  Loader2,
   Package,
-  TrendingDown,
+  Plus,
+  Printer,
+  Store,
   TrendingUp,
   Users,
   Wallet,
 } from "lucide-react";
-import { useFetch } from "@/hooks/use-fetch";
-import { formatMoney, formatMoneyCompact } from "@/lib/constants";
-import type { DashboardStats } from "@/lib/types";
-import { PaymentBadge } from "@/components/status-badges";
-import { saveOrOpenInvoicePDF } from "@/lib/pdf";
-import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -33,79 +47,104 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  useFetch,
+} from "@/hooks/use-fetch";
+import { formatMoney, formatMoneyCompact } from "@/lib/constants";
+import type { DailyReport, DashboardStats } from "@/lib/types";
+import { PaymentBadge } from "@/components/status-badges";
+import { buildDailyReportPDF, downloadPDF, printPDF, saveOrOpenInvoicePDF } from "@/lib/pdf";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const MONTH_TABS = ["JAN", "FÉV", "MAR", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEP", "OCT", "NOV", "DÉC"];
-const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+// ─── Palette du design (vert & or ETS LAMP FALL) ────────────────────────────
 
-// Couleurs des pastilles KPI (façon dashboard premium)
-const TONES = {
-  green: "bg-gradient-to-br from-green-600 to-emerald-700 text-white shadow-green-600/30",
-  rose: "bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-rose-500/30",
-  amber: "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-amber-500/30",
-  teal: "bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-teal-500/30",
+const KPI_TONES = {
+  green: "bg-gradient-to-br from-green-600 to-emerald-700 shadow-green-600/30",
+  gold: "bg-gradient-to-br from-amber-500 to-yellow-600 shadow-amber-500/30",
+  rose: "bg-gradient-to-br from-rose-500 to-red-600 shadow-rose-500/30",
+  teal: "bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/30",
 } as const;
 
-type Tone = keyof typeof TONES;
+type Tone = keyof typeof KPI_TONES;
 
-function KpiCard({
+/** Carte KPI colorée façon « Weekly Sales » du modèle. */
+function ColoredKpi({
   title,
   value,
   icon: Icon,
   tone,
+  hint,
 }: {
   title: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
   tone: Tone;
+  hint?: string;
 }) {
   return (
-    <Card className="shadow-luxe card-luxe">
-      <CardContent className="flex items-center gap-3.5 p-4 sm:p-5">
-        <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-lg", TONES[tone])}>
-          <Icon className="h-5 w-5" aria-hidden />
+    <div
+      className={cn(
+        "flex min-h-24 flex-col justify-between gap-2 rounded-xl p-4 text-white shadow-lg transition-transform hover:scale-[1.02]",
+        KPI_TONES[tone]
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide opacity-90">{title}</p>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/20">
+          <Icon className="h-4 w-4" aria-hidden />
         </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground leading-tight">{title}</p>
-          <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums sm:text-xl" title={value}>
-            {value}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MiniStat({ title, value, alert }: { title: string; value: string; alert?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3.5 py-2.5">
-      <span className="text-xs text-muted-foreground">{title}</span>
-      <span
-        className={cn(
-          "text-sm font-bold tabular-nums truncate",
-          alert ? "text-destructive" : "text-foreground"
-        )}
-        title={value}
-      >
-        {value}
-      </span>
+      </div>
+      <div>
+        <p className="truncate text-lg font-extrabold tabular-nums sm:text-xl" title={value}>
+          {value}
+        </p>
+        {hint && <p className="text-[11px] opacity-85">{hint}</p>}
+      </div>
     </div>
   );
 }
 
-function DetailsPill({ label = "Détails", onClick }: { label?: string; onClick: () => void }) {
+/** Petite carte stat large (façon « TOTAL CUSTOMERS » du modèle). */
+function BigStat({
+  title,
+  value,
+  icon: Icon,
+  onClick,
+  actionLabel,
+}: {
+  title: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+  onClick?: () => void;
+  actionLabel?: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-primary/40 px-3.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+      disabled={!onClick}
+      className={cn(
+        "card-luxe flex items-center justify-between gap-3 rounded-xl border bg-card px-5 py-4 text-left shadow-luxe transition-all",
+        onClick && "hover:border-primary/40 hover:shadow-md"
+      )}
     >
-      {label}
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
+        <p className="mt-1 truncate text-2xl font-extrabold tabular-nums">{value}</p>
+        {actionLabel && onClick && (
+          <p className="mt-0.5 text-[11px] font-semibold text-primary">{actionLabel} →</p>
+        )}
+      </div>
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" aria-hidden />
+      </div>
     </button>
   );
 }
 
-function VBar({
+/** Barre de progression horizontale (top clients / catégories). */
+function HBar({
   label,
   value,
   max,
@@ -118,412 +157,296 @@ function VBar({
   display: string;
   colorClass: string;
 }) {
-  const h = Math.max(4, (value / max) * 100);
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${label} : ${display}`}>
-      <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{display}</span>
-      <div className="flex h-24 w-full max-w-16 items-end overflow-hidden rounded-t-lg bg-muted/70 sm:h-28">
+    <div title={`${label} : ${display}`}>
+      <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+        <span className="truncate font-medium">{label}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">{display}</span>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-muted/70">
         <div
-          className={cn("w-full rounded-t-lg transition-all", colorClass)}
-          style={{ height: `${h}%` }}
+          className={cn("h-full rounded-full transition-all", colorClass)}
+          style={{ width: `${Math.max(2, (value / max) * 100)}%` }}
         />
       </div>
-      <span className="w-full truncate text-center text-[10px] sm:text-[11px] font-medium" title={label}>
-        {label}
-      </span>
     </div>
   );
 }
 
-// Intensité de couleur du calendrier selon le CA du jour
-function calendarCellClass(total: number, max: number): string {
-  if (total <= 0) return "bg-muted/50 text-muted-foreground";
-  const ratio = total / max;
-  if (ratio > 0.75) return "bg-green-700 text-white font-bold shadow-green-700/40 shadow-md";
-  if (ratio > 0.5) return "bg-green-600/85 text-white";
-  if (ratio > 0.25) return "bg-green-500/70 text-white";
-  if (ratio > 0.1) return "bg-green-400/60 text-green-950";
-  return "bg-gold-soft text-foreground";
+function ChartTooltipMoney(value: number | string): string {
+  return formatMoney(Number(value));
 }
 
-export function DashboardView({ onNavigate }: { onNavigate: (view: string) => void }) {
+export function DashboardView({
+  onNavigate,
+  onNewInvoice,
+}: {
+  onNavigate: (view: string) => void;
+  onNewInvoice: () => void;
+}) {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
   const { data: stats, loading } = useFetch<DashboardStats>(
-    `/api/dashboard?year=${year}&month=${year}-${String(month).padStart(2, "0")}`
+    `/api/dashboard?year=${year}`
   );
   const { toast } = useToast();
+  const [reportBusy, setReportBusy] = useState<"print" | "download" | null>(null);
 
-  // Grille du calendrier : lundi en premier
-  const calendar = useMemo(() => {
-    if (!stats) return [];
-    const first = new Date(year, month - 1, 1);
-    const offset = (first.getDay() + 6) % 7; // lundi = 0
-    const cells: (number | null)[] = Array.from({ length: offset }, () => null);
-    for (const d of stats.dailyRevenue) cells.push(d.day);
-    while (cells.length % 7 !== 0) cells.push(null);
-    return cells;
-  }, [stats, year, month]);
+  // ─── Rapport du jour (imprimer / télécharger) ─────────────────────────────
+  const handleDailyReport = async (action: "print" | "download") => {
+    setReportBusy(action);
+    try {
+      const res = await fetch(`/api/reports/daily`);
+      const report = (await res.json()) as DailyReport;
+      if (!res.ok) throw new Error((report as unknown as { error?: string }).error ?? "Erreur");
+      const doc = await buildDailyReportPDF(report);
+      if (action === "print") {
+        printPDF(doc);
+        toast({ title: "Rapport du jour", description: "Impression lancée." });
+      } else {
+        downloadPDF(doc, `rapport-du-jour-${report.date}.pdf`);
+        toast({ title: "Rapport du jour", description: "PDF téléchargé." });
+      }
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Génération du rapport impossible",
+        variant: "destructive",
+      });
+    } finally {
+      setReportBusy(null);
+    }
+  };
+
+  // ─── Données du graphique ─────────────────────────────────────────────────
+  const chartData = useMemo(
+    () =>
+      (stats?.monthlyRevenue ?? []).map((m) => ({
+        name: m.month,
+        total: m.total,
+        paid: m.paid,
+      })),
+    [stats]
+  );
+
+  const donutData = useMemo(() => {
+    const sc = stats?.statusCounts;
+    if (!sc) return [];
+    return [
+      { name: "Payées", value: sc.PAYE, color: "#2e7d32" },
+      { name: "Partielles", value: sc.PARTIEL, color: "#c9a227" },
+      { name: "Impayées", value: sc.NON_PAYE, color: "#c02b2b" },
+    ].filter((d) => d.value > 0);
+  }, [stats]);
+
+  const paidPct = useMemo(() => {
+    if (!stats) return 0;
+    const total = stats.statusCounts.PAYE + stats.statusCounts.PARTIEL + stats.statusCounts.NON_PAYE;
+    return total > 0 ? Math.round((stats.statusCounts.PAYE / total) * 100) : 0;
+  }, [stats]);
+
+  const maxClient = Math.max(1, ...(stats?.topClients ?? []).map((c) => c.total));
+  const maxCategory = Math.max(1, ...(stats?.topCategories ?? []).map((c) => c.total));
 
   if (loading || !stats) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-12 w-full" />
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
-          ))}
-        </div>
+        <Skeleton className="h-16 w-full" />
         <div className="grid gap-4 lg:grid-cols-3">
           <Skeleton className="h-80 w-full lg:col-span-2" />
-          <Skeleton className="h-80 w-full" />
+          <div className="grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-36 w-full" />
+            ))}
+          </div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Skeleton className="h-72 w-full lg:col-span-2" />
+          <Skeleton className="h-72 w-full" />
         </div>
       </div>
     );
   }
 
-  const maxDaily = Math.max(1, ...stats.dailyRevenue.map((d) => d.total));
-  const maxClient = Math.max(1, ...stats.topClients.map((c) => c.total));
-  const maxCategory = Math.max(1, ...stats.topCategories.map((c) => c.total));
-  const maxTranche = Math.max(1, ...stats.tranches.map((t) => t.count));
-
-  // Évolution du CA vs année précédente
-  const prevYear = stats.year - 1;
-  const yearDelta =
-    stats.prevYearRevenue > 0
-      ? ((stats.revenueTotal - stats.prevYearRevenue) / stats.prevYearRevenue) * 100
-      : null;
-  const yearDeltaFmt =
-    yearDelta !== null
-      ? Math.abs(yearDelta).toLocaleString("fr-FR", {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        })
-      : "";
-
-  const trancheColors = [
-    "bg-gradient-to-r from-green-700 to-green-500",
-    "bg-gradient-to-r from-emerald-700 to-emerald-500",
-    "bg-gradient-to-r from-teal-600 to-teal-400",
-    "bg-gradient-to-r from-pink-600 to-pink-400",
-    "bg-gradient-to-r from-rose-600 to-rose-400",
-  ];
-
   return (
     <div className="space-y-4 sm:space-y-5">
-      {/* Bandeau titre façon dashboard premium */}
+      {/* ─── Bandeau titre + actions ─── */}
       <div className="card-luxe rounded-xl border bg-card shadow-luxe">
-        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-          <div className="flex w-24 items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setYear((y) => y - 1)}
-              aria-label="Année précédente"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs font-semibold tabular-nums text-muted-foreground">{year}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setYear((y) => y + 1)}
-              aria-label="Année suivante"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <h1 className="text-center text-base font-extrabold sm:text-xl">
-              <span className="text-luxe-gradient">
-                Tableau de bord des ventes — Année {stats.year}
-              </span>
+        <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg font-extrabold sm:text-xl">
+              <span className="text-luxe-gradient">Tableau de bord — {stats.year}</span>
             </h1>
-            {yearDelta !== null ? (
-              <Badge
-                variant="outline"
-                className={cn(
-                  "gap-1 border-gold/60 bg-gold-soft/50 text-[11px] font-semibold",
-                  yearDelta >= 0
-                    ? "text-emerald-700 dark:text-emerald-400"
-                    : "text-red-600 dark:text-red-400"
-                )}
-                title={`CA ${stats.year} : ${formatMoney(stats.revenueTotal)} — CA ${prevYear} : ${formatMoney(stats.prevYearRevenue)}`}
-              >
-                {yearDelta >= 0 ? (
-                  <TrendingUp className="h-3 w-3" aria-hidden />
-                ) : (
-                  <TrendingDown className="h-3 w-3" aria-hidden />
-                )}
-                vs {prevYear} : {yearDelta >= 0 ? "+" : "−"}
-                {yearDeltaFmt} %
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className="gap-1 border-gold/60 bg-gold-soft/50 text-[11px] font-semibold text-muted-foreground"
-                title={`Aucun CA enregistré en ${prevYear}`}
-              >
-                vs {prevYear} : —
-              </Badge>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}
+            </p>
           </div>
-          <div className="flex w-24 justify-end">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-green-700 to-emerald-600 text-white shadow-lg shadow-green-700/30">
-              <TrendingUp className="h-4.5 w-4.5" aria-hidden />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-lg border bg-muted/50">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setYear((y) => y - 1)} aria-label="Année précédente">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-9 text-center text-sm font-bold tabular-nums">{year}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setYear((y) => y + 1)} aria-label="Année suivante">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={reportBusy !== null}>
+                  {reportBusy !== null ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Printer className="h-4 w-4" aria-hidden />
+                  )}
+                  Rapport du jour
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleDailyReport("print")}>
+                  <Printer className="h-4 w-4" aria-hidden /> Imprimer
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDailyReport("download")}>
+                  <Download className="h-4 w-4" aria-hidden /> Télécharger le PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" onClick={onNewInvoice}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Nouvelle facture
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Cartes KPI principales */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard title="Total Revenu" value={formatMoneyCompact(stats.revenueTotal)} icon={Wallet} tone="green" />
-        <KpiCard title="Nombre Factures" value={String(stats.invoiceCount)} icon={FileText} tone="rose" />
-        <KpiCard title="Nombre Clients" value={String(stats.clientCount)} icon={Users} tone="amber" />
-        <KpiCard
-          title="Commandes en cours"
-          value={String(stats.pendingOrders)}
-          icon={ClipboardList}
-          tone="teal"
-        />
-      </div>
-
-      {/* Mini indicateurs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MiniStat title="Encaissé" value={formatMoneyCompact(stats.paidTotal)} />
-        <MiniStat title="Impayés" value={formatMoneyCompact(stats.unpaidTotal)} alert={stats.unpaidTotal > 0} />
-        <MiniStat title="Proformas" value={String(stats.proformaCount)} />
-        <MiniStat title="Achats fournisseurs" value={formatMoneyCompact(stats.purchaseTotal)} />
-      </div>
-
-      {/* Calendrier + Tranches */}
+      {/* ─── Rangée 1 : graphique + 4 KPI colorées ─── */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Période calendaire */}
         <Card className="card-luxe shadow-luxe lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarDays className="h-4 w-4 text-primary" aria-hidden />
-              Période Calendaire — CA par jour
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Onglets des mois */}
-            <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Choisir le mois">
-              {MONTH_TABS.map((label, idx) => {
-                const active = idx + 1 === month;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setMonth(idx + 1)}
-                    className={cn(
-                      "shrink-0 rounded-md px-2.5 py-1.5 text-[11px] font-bold tracking-wide transition-colors",
-                      active
-                        ? "theme-toggle-luxe text-white"
-                        : "bg-muted/70 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            {/* Grille du mois */}
-            <div className="grid grid-cols-7 gap-1.5">
-              {WEEKDAYS.map((d) => (
-                <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {d}
-                </div>
-              ))}
-              {calendar.map((day, i) =>
-                day === null ? (
-                  <div key={`e-${i}`} />
-                ) : (
-                  (() => {
-                    const info = stats.dailyRevenue[day - 1];
-                    return (
-                      <div
-                        key={day}
-                        title={
-                          info && info.total > 0
-                            ? `${day} ${MONTH_TABS[month - 1]} : ${formatMoney(info.total)} (${info.count} facture${info.count > 1 ? "s" : ""})`
-                            : `${day} ${MONTH_TABS[month - 1]} : aucun CA`
-                        }
-                        className={cn(
-                          "flex aspect-square items-center justify-center rounded-md text-[11px] sm:text-xs transition-transform hover:scale-105",
-                          calendarCellClass(info?.total ?? 0, maxDaily)
-                        )}
-                      >
-                        {day}
-                      </div>
-                    );
-                  })()
-                )
-              )}
-            </div>
-            {/* Légende */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-muted/60 border" /> Aucun CA
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-green-400/60" /> Faible
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-green-600/85" /> Moyen
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-green-700" /> Élevé
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tranches de facturation */}
-        <Card className="card-luxe shadow-luxe">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Montant par tranche de facturation</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3.5">
-            {stats.tranches.every((t) => t.count === 0) ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">Aucune facture enregistrée.</p>
-            ) : (
-              stats.tranches.map((t, i) => (
-                <div key={t.label} title={`${t.label} : ${t.count} facture(s) — ${formatMoney(t.total)}`}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium">{t.label}</span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {t.count} · {formatMoney(t.total)}
-                    </span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-muted/70">
-                    <div
-                      className={cn("h-full rounded-full transition-all", trancheColors[i])}
-                      style={{ width: `${Math.max(2, (t.count / maxTranche) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Top clients + Catégories */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="card-luxe shadow-luxe">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between gap-2 text-base">
-              <span>Top 5 — Revenu par client</span>
-              <DetailsPill onClick={() => onNavigate("clients")} />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stats.topClients.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">Aucune vente enregistrée.</p>
-            ) : (
-              <div className="flex items-end gap-2 sm:gap-4">
-                {stats.topClients.map((c, i) => (
-                  <VBar
-                    key={c.name}
-                    label={c.name}
-                    value={c.total}
-                    max={maxClient}
-                    display={`${Math.round(c.total / 1000)}k`}
-                    colorClass={
-                      i === 0
-                        ? "bg-gradient-to-t from-amber-600 to-amber-400"
-                        : i === 1
-                          ? "bg-gradient-to-t from-amber-500/90 to-orange-400/90"
-                          : "bg-gradient-to-t from-amber-400/80 to-amber-300/70"
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="card-luxe shadow-luxe">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between gap-2 text-base">
-              <span>Total Revenu par catégorie</span>
-              <DetailsPill onClick={() => onNavigate("produits")} />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stats.topCategories.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">Aucune vente enregistrée.</p>
-            ) : (
-              <div className="flex items-end gap-2 sm:gap-3">
-                {stats.topCategories.slice(0, 6).map((c, i) => (
-                  <VBar
-                    key={c.category}
-                    label={c.label}
-                    value={c.total}
-                    max={maxCategory}
-                    display={`${Math.round(c.total / 1000)}k`}
-                    colorClass={
-                      i === 0
-                        ? "bg-gradient-to-t from-teal-600 to-teal-400"
-                        : i === 1
-                          ? "bg-gradient-to-t from-teal-500/90 to-emerald-400/90"
-                          : "bg-gradient-to-t from-teal-400/80 to-teal-300/70"
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Dernières factures + Alertes stock */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="min-w-0 overflow-hidden shadow-luxe">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center justify-between">
-              Dernières factures
-              <DetailsPill label="Voir tout" onClick={() => onNavigate("factures")} />
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendingUp className="h-4 w-4 text-primary" aria-hidden />
+              Évolution des ventes — {stats.year}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="h-72 sm:h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#2e7d32" stopOpacity={0.45} />
+                    <stop offset="100%" stopColor="#2e7d32" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="gradGold" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#c9a227" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#c9a227" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.2)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={54}
+                  tickFormatter={(v: number) => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)} M` : v >= 1000 ? `${Math.round(v / 1000)} k` : String(v))}
+                />
+                <Tooltip
+                  formatter={ChartTooltipMoney}
+                  contentStyle={{ borderRadius: 10, borderColor: "rgba(0,0,0,0.1)", fontSize: 12 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  name="Facturé"
+                  stroke="#2e7d32"
+                  strokeWidth={2.5}
+                  fill="url(#gradGreen)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="paid"
+                  name="Encaissé"
+                  stroke="#c9a227"
+                  strokeWidth={2}
+                  fill="url(#gradGold)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* 4 cartes colorées (2×2) */}
+        <div className="grid grid-cols-2 gap-3">
+          <ColoredKpi
+            title="Ventes du jour"
+            value={formatMoneyCompact(stats.today.sales)}
+            icon={FileText}
+            tone="green"
+            hint={`${stats.today.invoiceCount} facture(s)`}
+          />
+          <ColoredKpi
+            title="Encaissé du jour"
+            value={formatMoneyCompact(stats.today.received)}
+            icon={Wallet}
+            tone="gold"
+            hint={`${stats.today.paymentCount} versement(s)`}
+          />
+          <ColoredKpi
+            title="Créances clients"
+            value={formatMoneyCompact(stats.unpaidTotal)}
+            icon={CreditCard}
+            tone="rose"
+            hint="Reste à encaisser"
+          />
+          <ColoredKpi
+            title="Crédits à payer"
+            value={formatMoneyCompact(stats.credit.reste)}
+            icon={Store}
+            tone="teal"
+            hint={`${stats.credit.count} achat(s) à crédit`}
+          />
+        </div>
+      </div>
+
+      {/* ─── Rangée 2 : table dernières factures + donut statuts ─── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="min-w-0 overflow-hidden shadow-luxe lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between gap-2 text-base">
+              Dernières factures
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onNavigate("factures")}>
+                Voir tout
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-0 pb-0">
             {stats.recentInvoices.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Aucune facture.</p>
+              <p className="py-10 text-center text-sm text-muted-foreground">Aucune facture.</p>
             ) : (
               <Table>
+                {/* En-tête coloré façon tableau du modèle */}
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>N°</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Paiement</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
-                    <TableHead className="w-10" aria-label="PDF" />
+                  <TableRow className="bg-primary hover:bg-primary">
+                    <TableHead className="h-10 rounded-tl-lg text-primary-foreground">N°</TableHead>
+                    <TableHead className="h-10 text-primary-foreground">Client</TableHead>
+                    <TableHead className="h-10 text-primary-foreground">Paiement</TableHead>
+                    <TableHead className="h-10 text-right text-primary-foreground">Montant</TableHead>
+                    <TableHead className="h-10 rounded-tr-lg text-right text-primary-foreground">PDF</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {stats.recentInvoices.map((f) => (
                     <TableRow key={f.id}>
-                      <TableCell className="font-medium text-xs whitespace-nowrap">{f.number}</TableCell>
-                      <TableCell className="max-w-24 truncate text-xs" title={f.clientName}>
+                      <TableCell className="whitespace-nowrap text-xs font-semibold">{f.number}</TableCell>
+                      <TableCell className="max-w-28 truncate text-xs" title={f.clientName}>
                         {f.clientName || "Comptoir"}
                       </TableCell>
                       <TableCell>
                         <PaymentBadge status={f.paymentStatus} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums whitespace-nowrap text-xs">
+                      <TableCell className="whitespace-nowrap text-right text-xs tabular-nums">
                         {formatMoney(f.totalTTC)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <button
                           type="button"
                           onClick={async () => {
@@ -533,10 +456,10 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
                               toast({ title: "Erreur PDF", variant: "destructive" });
                             }
                           }}
-                          className="text-muted-foreground hover:text-primary"
+                          className="inline-flex text-muted-foreground hover:text-primary"
                           aria-label={`Télécharger ${f.number}`}
                         >
-                          <Download className="h-4 w-4" />
+                          <Download className="h-4 w-4" aria-hidden />
                         </button>
                       </TableCell>
                     </TableRow>
@@ -547,45 +470,183 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 overflow-hidden shadow-luxe">
+        {/* Donut : répartition des statuts */}
+        <Card className="card-luxe shadow-luxe">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-base">Statut des factures</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {donutData.length === 0 ? (
+              <p className="py-16 text-center text-sm text-muted-foreground">Aucune facture enregistrée.</p>
+            ) : (
+              <>
+                <div className="relative mx-auto h-48 max-w-[240px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius="68%"
+                        outerRadius="95%"
+                        paddingAngle={3}
+                        strokeWidth={0}
+                      >
+                        {donutData.map((d) => (
+                          <Cell key={d.name} fill={d.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name) => [`${value} facture(s)`, name]}
+                        contentStyle={{ borderRadius: 10, fontSize: 12 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl font-extrabold tabular-nums">{paidPct}%</span>
+                    <span className="text-[11px] text-muted-foreground">payées</span>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  {donutData.map((d) => (
+                    <div key={d.name} className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} aria-hidden />
+                        {d.name}
+                      </span>
+                      <span className="font-semibold tabular-nums">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ─── Rangée 3 : Top clients + Top catégories ─── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="card-luxe shadow-luxe">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between gap-2 text-base">
+              Top clients — {stats.year}
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onNavigate("clients")}>
+                Détails
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {stats.topClients.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Aucune vente enregistrée.</p>
+            ) : (
+              stats.topClients.slice(0, 5).map((c, i) => (
+                <HBar
+                  key={c.name}
+                  label={c.name}
+                  value={c.total}
+                  max={maxClient}
+                  display={formatMoneyCompact(c.total)}
+                  colorClass={
+                    i === 0
+                      ? "bg-gradient-to-r from-green-700 to-emerald-500"
+                      : i === 1
+                        ? "bg-gradient-to-r from-green-600 to-emerald-400"
+                        : "bg-gradient-to-r from-green-500/90 to-emerald-300/80"
+                  }
+                />
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="card-luxe shadow-luxe">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between gap-2 text-base">
+              Revenu par catégorie
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onNavigate("produits")}>
+                Détails
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {stats.topCategories.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Aucune vente enregistrée.</p>
+            ) : (
+              stats.topCategories.slice(0, 5).map((c, i) => (
+                <HBar
+                  key={c.category}
+                  label={c.label}
+                  value={c.total}
+                  max={maxCategory}
+                  display={formatMoneyCompact(c.total)}
+                  colorClass={
+                    i === 0
+                      ? "bg-gradient-to-r from-amber-600 to-yellow-400"
+                      : i === 1
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-300"
+                        : "bg-gradient-to-r from-amber-400/90 to-yellow-200/80"
+                  }
+                />
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ─── Rangée 4 : grandes stats + alertes stock ─── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <BigStat
+          title="Total clients"
+          value={String(stats.clientCount)}
+          icon={Users}
+          onClick={() => onNavigate("clients")}
+          actionLabel="Gérer les clients"
+        />
+        <BigStat
+          title="Produits au catalogue"
+          value={String(stats.productCount)}
+          icon={Package}
+          onClick={() => onNavigate("produits")}
+          actionLabel="Voir les produits"
+        />
+        <BigStat
+          title="Achats à crédit"
+          value={String(stats.credit.count)}
+          icon={Building2}
+          onClick={() => onNavigate("commercant")}
+          actionLabel="Onglet Commerçant"
+        />
+
+        <Card className="card-luxe shadow-luxe lg:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden />
               Alertes de stock
               <span className="ml-auto">
-                <DetailsPill label="Produits" onClick={() => onNavigate("produits")} />
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onNavigate("produits")}>
+                  Produits
+                </Button>
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {stats.lowStock.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
+              <p className="py-4 text-center text-sm text-muted-foreground">
                 Tous les stocks sont au niveau. 👍
               </p>
             ) : (
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {stats.lowStock.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border p-2.5"
-                  >
-                    <div className="min-w-0 flex items-center gap-2.5">
-                      {p.image ? (
-                         
-                        <img src={p.image} alt="" className="h-8 w-8 rounded-md object-cover shrink-0" />
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted shrink-0">
-                          <Package className="h-4 w-4 text-muted-foreground" aria-hidden />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Seuil : {p.minStock} {p.unit}
-                        </p>
-                      </div>
+                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium" title={p.name}>
+                        {p.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Seuil : {p.minStock} {p.unit}
+                      </p>
                     </div>
-                    <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700 whitespace-nowrap dark:bg-red-950 dark:text-red-300">
+                    <span className="whitespace-nowrap rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700 dark:bg-red-950 dark:text-red-300">
                       {p.stock} {p.unit}
                     </span>
                   </div>

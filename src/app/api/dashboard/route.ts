@@ -30,7 +30,12 @@ export async function GET(request: NextRequest) {
         ? monthParam!
         : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
-    const [ventes, proformaCount, clientCount, productCount, purchases, orders, products, recentRaw, prevYear] =
+    // bornes du jour (heure locale du serveur)
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    const [ventes, proformaCount, clientCount, productCount, purchases, orders, products, recentRaw, prevYear, paymentsToday, creditPurchases, todayVentes, todayProformas, statusRows] =
       await Promise.all([
         db.invoice.findMany({
           where: { type: "VENTE" },
@@ -68,6 +73,30 @@ export async function GET(request: NextRequest) {
             },
           },
           _sum: { totalTTC: true },
+        }),
+        // Encaissements du jour (versements factures)
+        db.payment.aggregate({
+          where: { paidAt: { gte: dayStart, lt: dayEnd } },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        // Achats à crédit (Commerçant + Immo)
+        db.creditPurchase.findMany({ select: { total: true, amountPaid: true } }),
+        // Ventes du jour
+        db.invoice.aggregate({
+          where: { type: "VENTE", date: { gte: dayStart, lt: dayEnd } },
+          _sum: { totalTTC: true },
+          _count: true,
+        }),
+        // Proformas du jour
+        db.invoice.count({
+          where: { type: "PROFORMA", date: { gte: dayStart, lt: dayEnd } },
+        }),
+        // Répartition par statut de paiement (factures de vente)
+        db.invoice.groupBy({
+          by: ["paymentStatus"],
+          where: { type: "VENTE" },
+          _count: true,
         }),
       ]);
 
@@ -143,6 +172,16 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => a.stock - b.stock)
       .slice(0, 8);
 
+    const statusCounts = { PAYE: 0, PARTIEL: 0, NON_PAYE: 0 };
+    for (const row of statusRows) {
+      if (row.paymentStatus in statusCounts) {
+        statusCounts[row.paymentStatus as keyof typeof statusCounts] = row._count;
+      }
+    }
+
+    const creditTotal = creditPurchases.reduce((s, c) => s + c.total, 0);
+    const creditPaid = creditPurchases.reduce((s, c) => s + c.amountPaid, 0);
+
     return NextResponse.json({
       year,
       month,
@@ -163,6 +202,20 @@ export async function GET(request: NextRequest) {
       topClients,
       recentInvoices: recentRaw,
       topCategories,
+      today: {
+        sales: Math.round(todayVentes._sum.totalTTC ?? 0),
+        received: Math.round(paymentsToday._sum.amount ?? 0),
+        invoiceCount: todayVentes._count,
+        paymentCount: paymentsToday._count,
+        proformaCount: todayProformas,
+      },
+      statusCounts,
+      credit: {
+        count: creditPurchases.length,
+        total: Math.round(creditTotal),
+        paid: Math.round(creditPaid),
+        reste: Math.round(creditTotal - creditPaid),
+      },
     });
   } catch (error) {
     console.error("GET /api/dashboard", error);

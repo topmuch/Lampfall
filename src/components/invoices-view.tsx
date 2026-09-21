@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +47,7 @@ import {
   Truck,
   Wallet,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
 import { formatMoney } from "@/lib/constants";
@@ -55,7 +56,7 @@ import {
   DeliveryBadge,
   PaymentBadge,
 } from "@/components/status-badges";
-import { InvoiceDialog } from "@/components/invoice-dialog";
+import { InvoiceEditor } from "@/components/invoice-editor";
 import { InvoiceShareDialog } from "@/components/invoice-share-dialog";
 import { PaymentsDialog } from "@/components/payments-dialog";
 import {
@@ -70,9 +71,13 @@ import { TransferCreditDialog } from "@/components/transfer-credit-dialog";
 interface InvoicesViewProps {
   type: "VENTE" | "PROFORMA";
   onNavigateToInvoices?: () => void;
+  /** Ouvre automatiquement la page de création de facture (bouton du tableau de bord). */
+  autoOpenNew?: boolean;
+  /** Signale que l'ouverture automatique a été consommée. */
+  onAutoOpenNewConsumed?: () => void;
 }
 
-export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) {
+export function InvoicesView({ type, onNavigateToInvoices, autoOpenNew, onAutoOpenNewConsumed }: InvoicesViewProps) {
   const { toast } = useToast();
   const isProforma = type === "PROFORMA";
 
@@ -103,7 +108,8 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
   const { data: clients } = useFetch<Client[]>("/api/clients");
   const { data: products } = useFetch<Product[]>("/api/products");
 
-  const [dialogOpen, setDialogOpen] = useState(false);
+  // Page plein écran de création / édition (remplace la modale)
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [deleting, setDeleting] = useState<Invoice | null>(null);
   const [convertTarget, setConvertTarget] = useState<Invoice | null>(null);
@@ -117,7 +123,10 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
   // Transfert en achat à crédit (Commerçant / Immo)
   const [transferTarget, setTransferTarget] = useState<Invoice | null>(null);
   const { data: transfers, refetch: refetchTransfers } = useFetch<CreditPurchase[]>("/api/credit-purchases");
-  const transferredIds = useMemo(() => new Set((transfers ?? []).map((t) => t.sourceId)), [transfers]);
+  const transferMap = useMemo(
+    () => new Map((transfers ?? []).map((t) => [t.sourceId, t.destination] as const)),
+    [transfers]
+  );
 
   const totals = useMemo(() => {
     const list = invoices ?? [];
@@ -138,13 +147,22 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
 
   const openCreate = () => {
     setEditing(null);
-    setDialogOpen(true);
+    setEditorOpen(true);
   };
 
   const openEdit = (inv: Invoice) => {
     setEditing(inv);
-    setDialogOpen(true);
+    setEditorOpen(true);
   };
+
+  // Ouverture automatique (bouton « Nouvelle facture » du tableau de bord)
+  useEffect(() => {
+    if (autoOpenNew) {
+      setEditing(null);
+      setEditorOpen(true);
+      onAutoOpenNewConsumed?.();
+    }
+  }, [autoOpenNew, onAutoOpenNewConsumed]);
 
   const doDelete = async () => {
     if (!deleting) return;
@@ -397,15 +415,16 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
                 {invoices.map((inv) => (
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">
-                      <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
                         {inv.number}
-                        {transferredIds.has(inv.id) && (
-                          <span
-                            className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary"
-                            title="Transférée en achat à crédit"
+                        {transferMap.get(inv.id) && (
+                          <Badge
+                            className="gap-0.5 border-gold/50 bg-gold-soft/60 px-1.5 py-0 text-[10px] font-bold text-amber-800 hover:bg-gold-soft/60 dark:text-amber-300"
+                            title={`Classée à crédit — onglet ${transferMap.get(inv.id) === "IMMO" ? "Immo" : "Commerçant"}`}
                           >
-                            <CreditCard className="h-3 w-3" aria-hidden /> Crédit
-                          </span>
+                            <CreditCard className="h-3 w-3" aria-hidden /> Crédit ·{" "}
+                            {transferMap.get(inv.id) === "IMMO" ? "Immo" : "Commerçant"}
+                          </Badge>
                         )}
                       </span>
                     </TableCell>
@@ -502,15 +521,19 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
         </CardContent>
       </Card>
 
-      {/* Dialog création / édition */}
-      <InvoiceDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onSaved={refetch}
+      {/* Page plein écran création / édition */}
+      <InvoiceEditor
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onSaved={() => {
+          refetch();
+          refetchTransfers();
+        }}
         type={type}
         invoice={editing}
         clients={clients ?? []}
         products={products ?? []}
+        alreadyTransferred={editing ? transferMap.get(editing.id) ?? null : null}
       />
 
       {/* Dialog partage : relance / envoi (WhatsApp, email, copie, PDF) */}

@@ -335,3 +335,26 @@ Stage Summary:
 - Impression opérationnelle : factures/proformas en A4 via navigateur ; reçus de versement en ticket 80 mm pour imprimante thermique.
 - Achats à crédit : toute facture ou proforma peut être transférée vers l'onglet Commerçant ou Immo, avec suivi des versements et du solde ; anti-doublon ; annulation possible.
 - Onglet Immo : ancien contenu locataires/loyers retiré de l'affichage, remplacé par le registre des achats à crédit immobilier ; onglet Commerçant créé.
+
+---
+Task ID: 10
+Agent: Z.ai Code (principal)
+Task: Demande à 8 volets — facture en page plein écran, classement crédit direct à la création, badge Crédit, réorganisation sidebar, PDF facture payée dans Commerçant/Immo, fix ticket 80mm invisible, refonte dashboard (design joint version large), rapport du jour imprimable.
+
+Work Log:
+- Étendu `src/lib/types.ts` : `DashboardToday`, `DashboardStats.today/statusCounts/credit`, types `DailyReport`/`DailyPaymentRow`/`DailyCreditPaymentRow`.
+- Nouvelle API `GET /api/reports/daily?date=` : factures du jour, versements (Payment), règlements crédit (CreditPayment), répartition par mode, synthèse HT/TVA/TTC.
+- Étendu `GET /api/dashboard` : stats du jour (ventes, encaissements, compteurs), répartition statuts paiement (groupBy), agrégats achats à crédit.
+- `src/lib/pdf.ts` : 1) FIX ticket 80mm — `printTicket80` passe de `srcdoc` à **blob URL + iframe** (même mécanique fiable que l'impression A4 qui fonctionnait) ; 2) extrait `buildPaymentTicketHTML` réutilisable (aperçu + impression) ; 3) nouveau `buildDailyReportPDF` (A4 vert/or : 4 KPI, statuts, table factures du jour, versements encaissés, règlements crédit, total encaissé du jour, répartition par mode).
+- Nouveau `src/components/ticket-preview-dialog.tsx` : **aperçu visuel du ticket 80 mm** (iframe srcDoc, largeur 312px ≈ 80 mm) + bouton « Imprimer (80 mm) ». Le ticket s'affiche DÉSormais automatiquement après chaque versement enregistré (facture ET règlement crédit).
+- `payments-dialog.tsx` : ouverture auto de l'aperçu ticket après enregistrement d'un versement (lecture de `json.payment`) ; bouton reçu par ligne.
+- `credit-purchases-view.tsx` : badge « Crédit » doré sur chaque ligne ; bouton **Télécharger la facture PDF** (vert, icône Download) visible uniquement quand l'achat à crédit est PAYE (fetch `/api/invoices/{sourceId}` + `saveOrOpenInvoicePDF`) ; aperçu ticket 80 mm aussi dans les versements crédit (pseudo-document number/tier/total).
+- Nouveau `src/components/invoice-editor.tsx` : **page plein écran** (fixed inset-0, header collant avec retour + Créer) remplaçant la modale de facture. Contient une carte « Classement du crédit » avec 3 radio-cards (Vente normale / Commerçant / Immo) + champs tiers/échéance/note ; à la création, si destination choisie → POST auto vers `/api/credit-purchases` ; info « déjà classée à crédit » en édition.
+- `invoices-view.tsx` : utilise `InvoiceEditor` (page), badge enrichi « Crédit · Commerçant / Crédit · Immo » (map sourceId→destination), props `autoOpenNew`/`onAutoOpenNewConsumed` pour l'ouverture depuis le dashboard.
+- `app-shell.tsx` : sidebar réorganisé en **Pilotage (Dashboard, Rapports) / Ventes (Factures, Proforma, Commandes, Clients) / Crédits (Commerçant, Immo) / Achats & stock (Achats, Fournisseurs, Produits, Mouvements) / Administration** ; câblage bouton « Nouvelle facture » du dashboard → bascule Factures + ouverture page de création.
+- `dashboard-view.tsx` **entièrement réécrit** (design modèle « Admin Dashboard », version large, thème vert/or) : bandeau titre + navigation année + actions [Rapport du jour ▾ (Imprimer/PDF), Nouvelle facture] ; graphique aires recharts « Évolution des ventes » (facturé vert / encaissé or, gradients) ; **4 KPI colorées 2×2** (Ventes du jour, Encaissé du jour, Créances clients, Crédits à payer) ; table « Dernières factures » à **en-tête vert coloré** façon modèle ; **donut** « Statut des factures » avec % payées au centre ; Top clients / Revenu par catégorie en barres horizontales ; 3 grandes stats (Total clients, Produits, Achats à crédit) cliquables ; Alertes de stock en grille.
+- Tests agent-browser complets (desktop 1440 + mobile 390, clair/sombre) : création facture classée Commerçant (toast + badge), versements crédit + facture avec aperçu ticket auto, paiement intégral → bouton PDF apparaît, téléchargement facture PDF OK, rapport du jour téléchargé (rendu vérifié), lint 0 erreur, dev.log 0 erreur.
+
+Stage Summary:
+- Les 8 demandes sont livrées et testées. Commit unique « Feature » à pousser (token GitHub compromis à révoquer — demander un token frais à l'utilisateur avant push).
+- Points de vigilance : le statut de paiement de la facture d'origine reste indépendant des règlements crédit (architecture existante) ; `printTicket80` et `printPDF` partagent le même mécanisme blob+iframe (fiable là où l'A4 marchait) ; l'aperçu ticket garantit un affichage visible même si l'impression est bloquée par le navigateur.

@@ -22,7 +22,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-client";
-import { printPaymentTicket80 } from "@/lib/pdf";
+import { TicketPreviewDialog } from "@/components/ticket-preview-dialog";
 import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants";
 import type { Invoice, Payment } from "@/lib/types";
 
@@ -57,6 +57,8 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Aperçu du ticket 80 mm (s'affiche après chaque versement ou via le bouton)
+  const [ticketPayment, setTicketPayment] = useState<Payment | null>(null);
 
   const totalTTC = current?.totalTTC ?? 0;
   const dejaPaye = current?.amountPaid ?? 0;
@@ -135,6 +137,9 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
         title: "Versement enregistré",
         description: `${formatMoney(value)} — ${PAYMENT_METHOD_LABELS[method] ?? method}`,
       });
+      // Ouvre directement l'aperçu du ticket 80 mm du versement qui vient d'être enregistré
+      const saved = json.payment as Payment | undefined;
+      if (saved) setTicketPayment(saved);
     } catch (e) {
       toast({
         title: "Erreur",
@@ -143,19 +148,6 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
       });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const printTicket = async (p: Payment) => {
-    if (!current) return;
-    try {
-      await printPaymentTicket80(p, current);
-    } catch {
-      toast({
-        title: "Erreur",
-        description: "Impression du ticket impossible",
-        variant: "destructive",
-      });
     }
   };
 
@@ -179,6 +171,16 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
       setDeletingId(null);
     }
   };
+
+  // Document courant adapté à l'aperçu ticket (mise à jour après chaque versement)
+  const ticketDoc = current
+    ? {
+        number: current.number,
+        clientName: current.clientName,
+        totalTTC: current.totalTTC,
+        amountPaid: current.amountPaid,
+      }
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -270,10 +272,10 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                        onClick={() => printTicket(p)}
+                        onClick={() => setTicketPayment(p)}
                         disabled={deletingId === p.id}
-                        aria-label={`Imprimer le ticket 80 mm du versement du ${formatDate(p.paidAt)}`}
-                        title="Imprimer le ticket 80 mm"
+                        aria-label={`Afficher le ticket 80 mm du versement du ${formatDate(p.paidAt)}`}
+                        title="Aperçu du ticket 80 mm"
                       >
                         <Receipt className="h-4 w-4" aria-hidden />
                       </Button>
@@ -361,6 +363,14 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
           </div>
         )}
       </DialogContent>
+
+      {/* Aperçu du reçu de versement — ticket 80 mm */}
+      <TicketPreviewDialog
+        open={ticketPayment !== null}
+        onOpenChange={(v) => !v && setTicketPayment(null)}
+        payment={ticketPayment}
+        doc={ticketDoc}
+      />
     </Dialog>
   );
 }

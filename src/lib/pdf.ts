@@ -3,7 +3,7 @@
 // Génération de documents PDF côté client avec jsPDF + AutoTable
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { Invoice, Order, Purchase, Client, Tenant, Rent, SalesReport, Product } from "./types";
+import type { Invoice, Order, Purchase, Client, Tenant, Rent, SalesReport, Product, DailyReport } from "./types";
 import {
   DELIVERY_LABELS,
   ORDER_STATUS_LABELS,
@@ -1298,30 +1298,42 @@ function ticketEsc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Imprime un ticket 80 mm : le HTML (avec @page size 80mm) est imprimé via un iframe masqué. */
+/**
+ * Imprime un document HTML (ticket 80 mm) : le HTML est encodé en blob URL puis
+ * imprimé via un iframe masqué — même mécanique que l'impression A4 (fiable).
+ */
 export function printTicket80(html: string): void {
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.setAttribute("title", "Ticket 80mm");
   iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;";
-  iframe.srcdoc = html;
+  iframe.src = url;
   iframe.onload = () => {
     try {
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
     } catch {
-      /* certains navigateurs bloquent : non bloquant */
+      // Repli : ouvre le ticket dans un onglet (impression manuelle)
+      window.open(url, "_blank");
     } finally {
-      window.setTimeout(() => iframe.remove(), 60_000);
+      window.setTimeout(() => {
+        iframe.remove();
+        URL.revokeObjectURL(url);
+      }, 60_000);
     }
   };
   document.body.appendChild(iframe);
 }
 
-/** Reçu de versement au format ticket 80 mm (imprimante thermique). */
-export async function printPaymentTicket80(payment: Payment, invoice: Invoice): Promise<void> {
+/** Reçu de versement au format ticket 80 mm — HTML complet (aperçu + impression). */
+export async function buildPaymentTicketHTML(
+  payment: Pick<Payment, "amount" | "method" | "paidAt" | "note">,
+  doc: Pick<Invoice, "number" | "clientName" | "totalTTC" | "amountPaid">
+): Promise<string> {
   const info = await loadCompanyInfo();
-  const reste = Math.max(0, invoice.totalTTC - invoice.amountPaid);
+  const reste = Math.max(0, doc.totalTTC - doc.amountPaid);
   const dateStr = new Date(payment.paidAt).toLocaleString("fr-FR", {
     day: "2-digit",
     month: "2-digit",
@@ -1332,22 +1344,23 @@ export async function printPaymentTicket80(payment: Payment, invoice: Invoice): 
   const methodLabel = PAYMENT_METHOD_LABELS[payment.method] ?? payment.method;
 
   const line = `<div class="sep"></div>`;
-  const html = `<!doctype html>
+  return `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
-<title>Recu ${ticketEsc(invoice.number)}</title>
+<title>Recu ${ticketEsc(doc.number)}</title>
 <style>
   @page { size: 80mm auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 80mm; }
   body {
-    width: 80mm;
     padding: 4mm 5mm;
     font-family: "Courier New", ui-monospace, monospace;
     font-size: 3.4mm;
     line-height: 1.45;
     color: #000;
     background: #fff;
+    -webkit-print-color-adjust: exact;
   }
   .center { text-align: center; }
   .bold { font-weight: 700; }
@@ -1370,8 +1383,8 @@ export async function printPaymentTicket80(payment: Payment, invoice: Invoice): 
   ${line}
   <div class="center bold">REÇU DE VERSEMENT</div>
   ${line}
-  <div class="row"><span>Document</span><span class="bold">${ticketEsc(invoice.number)}</span></div>
-  <div class="row"><span>Client</span><span>${ticketEsc(invoice.clientName || "Client comptoir")}</span></div>
+  <div class="row"><span>Document</span><span class="bold">${ticketEsc(doc.number)}</span></div>
+  <div class="row"><span>Client</span><span>${ticketEsc(doc.clientName || "Client comptoir")}</span></div>
   <div class="row"><span>Date</span><span>${dateStr}</span></div>
   <div class="row"><span>Mode</span><span>${ticketEsc(methodLabel)}</span></div>
   ${payment.note ? `<div class="small">Note : ${ticketEsc(payment.note)}</div>` : ""}
@@ -1381,15 +1394,195 @@ export async function printPaymentTicket80(payment: Payment, invoice: Invoice): 
     <div class="amount">${fmtMoney(payment.amount)}</div>
   </div>
   ${line}
-  <div class="row"><span>Total facture</span><span>${fmtMoney(invoice.totalTTC)}</span></div>
-  <div class="row"><span>Total versé</span><span>${fmtMoney(invoice.amountPaid)}</span></div>
+  <div class="row"><span>Total document</span><span>${fmtMoney(doc.totalTTC)}</span></div>
+  <div class="row"><span>Total versé</span><span>${fmtMoney(doc.amountPaid)}</span></div>
   <div class="row bold"><span>Reste à payer</span><span>${fmtMoney(reste)}</span></div>
   ${line}
   <div class="center small thanks">Merci de votre confiance !</div>
 </body>
 </html>`;
+}
 
+/** Imprime directement le ticket 80 mm du versement. */
+export async function printPaymentTicket80(payment: Payment, invoice: Invoice): Promise<void> {
+  const html = await buildPaymentTicketHTML(payment, invoice);
   printTicket80(html);
+}
+
+// ─── Rapport du jour (A4, imprimable) ───────────────────────────────────────
+
+/**
+ * Construit le rapport d'activité du jour : synthèse, factures du jour,
+ * versements encaissés et règlements des achats à crédit.
+ */
+export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await getLogoBase64();
+
+  const dateLabel = new Date(`${report.date}T12:00:00`).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  drawHeader(doc, logo, "RAPPORT DU JOUR", dateLabel);
+
+  // ─── Bloc de synthèse (4 cases) ───────────────────────────────────────────
+  const kpis: { label: string; value: string; color: readonly (number | number[])[] }[] = [
+    { label: "Factures du jour", value: String(report.summary.invoiceCount), color: GREEN },
+    { label: "Total facturé", value: fmtMoney(report.summary.totalTTC), color: DARK },
+    { label: "Encaissé (versements)", value: fmtMoney(report.summary.receivedTotal), color: GREEN },
+    { label: "Règlements crédit", value: fmtMoney(report.summary.creditPaidTotal), color: ORANGE },
+  ];
+  const boxW = 44;
+  const boxH = 18;
+  const gap = 4;
+  let kx = 14;
+  const ky = 50;
+  for (const k of kpis) {
+    doc.setFillColor(...GREEN_BG);
+    doc.roundedRect(kx, ky, boxW, boxH, 2, 2, "F");
+    doc.setTextColor(...GRAY);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(k.label.toUpperCase(), kx + boxW / 2, ky + 6, { align: "center" });
+    doc.setTextColor(...(k.color as [number, number, number]));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(k.value.length > 13 ? 8.5 : 10.5);
+    doc.text(k.value, kx + boxW / 2, ky + 13, { align: "center" });
+    kx += boxW + gap;
+  }
+
+  // Sous-ligne : statuts + proformas
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY);
+  doc.text(
+    `Payées : ${report.summary.paidCount}   •   Partielles : ${report.summary.partialCount}   •   Impayées : ${report.summary.unpaidCount}   •   Proformas du jour : ${report.summary.proformaCount}`,
+    14,
+    ky + boxH + 6
+  );
+
+  // ─── Tableau des factures du jour ─────────────────────────────────────────
+  autoTable(doc, {
+    startY: ky + boxH + 10,
+    head: [["N°", "Client", "Articles", "Total TTC", "Payé", "Statut"]],
+    body:
+      report.invoices.length > 0
+        ? report.invoices.map((f) => [
+            f.number,
+            f.clientName || "Client comptoir",
+            String(f.items.length),
+            fmtMoney(f.totalTTC),
+            fmtMoney(f.amountPaid),
+            PAYMENT_LABELS[f.paymentStatus] ?? f.paymentStatus,
+          ])
+        : [["—", "Aucune facture ce jour", "", "", "", ""]],
+    theme: "grid",
+    styles: { fontSize: 8, cellPadding: 2, textColor: DARK },
+    headStyles: { fillColor: [...GREEN], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    alternateRowStyles: { fillColor: [...GREEN_BG] },
+    columnStyles: {
+      3: { halign: "right" },
+      4: { halign: "right" },
+      0: { fontStyle: "bold" },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  // ─── Versements encaissés du jour ─────────────────────────────────────────
+  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...GREEN);
+  doc.text("Versements encaissés", 14, y);
+  autoTable(doc, {
+    startY: y + 2,
+    head: [["Heure", "Facture", "Client", "Mode", "Montant"]],
+    body:
+      report.payments.length > 0
+        ? report.payments.map((p) => [
+            new Date(p.paidAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+            p.invoiceNumber,
+            p.clientName || "Client comptoir",
+            PAYMENT_METHOD_LABELS[p.method] ?? p.method,
+            fmtMoney(p.amount),
+          ])
+        : [["—", "Aucun versement ce jour", "", "", ""]],
+    theme: "grid",
+    styles: { fontSize: 8, cellPadding: 2, textColor: DARK },
+    headStyles: { fillColor: [...GREEN], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    alternateRowStyles: { fillColor: [...GREEN_BG] },
+    columnStyles: { 4: { halign: "right" } },
+    margin: { left: 14, right: 14 },
+  });
+
+  // ─── Règlements des achats à crédit du jour ───────────────────────────────
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...ORANGE);
+  doc.text("Règlements crédit (Commerçant / Immo)", 14, y);
+  autoTable(doc, {
+    startY: y + 2,
+    head: [["Heure", "Document", "Tiers", "Registre", "Mode", "Montant"]],
+    body:
+      report.creditPayments.length > 0
+        ? report.creditPayments.map((p) => [
+            new Date(p.paidAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+            p.number,
+            p.tier,
+            p.destination === "IMMO" ? "Immo" : "Commerçant",
+            PAYMENT_METHOD_LABELS[p.method] ?? p.method,
+            fmtMoney(p.amount),
+          ])
+        : [["—", "Aucun règlement ce jour", "", "", "", ""]],
+    theme: "grid",
+    styles: { fontSize: 8, cellPadding: 2, textColor: DARK },
+    headStyles: { fillColor: [...ORANGE], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    alternateRowStyles: { fillColor: [253, 246, 236] },
+    columnStyles: { 5: { halign: "right" } },
+    margin: { left: 14, right: 14 },
+  });
+
+  // ─── Total encaissé du jour ───────────────────────────────────────────────
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  const grandTotal = report.summary.receivedTotal + report.summary.creditPaidTotal;
+  doc.setFillColor(...GREEN);
+  doc.roundedRect(120, y - 5, 76, 12, 2, 2, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("TOTAL ENCAISSÉ DU JOUR", 124, y + 2.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(fmtMoney(grandTotal), 192, y + 2.5, { align: "right" });
+
+  // ─── Répartition par mode ─────────────────────────────────────────────────
+  if (report.byMethod.length > 0) {
+    doc.setTextColor(...GRAY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    const modes = report.byMethod
+      .map((m) => `${m.label} : ${fmtMoney(m.amount)} (${m.count})`)
+      .join("   •   ");
+    doc.splitTextToSize(modes, 100).forEach((line: string, i: number) => {
+      doc.text(line, 14, y + i * 4.5);
+    });
+  }
+
+  // Pied de page
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY);
+  doc.text(
+    `Édité le ${new Date().toLocaleString("fr-FR")} — ETS LAMP FALL`,
+    105,
+    290,
+    { align: "center" }
+  );
+
+  return doc;
 }
 
 // ─── Historique des achats d'un client ──────────────────────────────────

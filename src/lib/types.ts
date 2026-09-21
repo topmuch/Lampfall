@@ -239,6 +239,70 @@ export interface DashboardStats {
   topClients: { name: string; total: number }[];
   recentInvoices: Invoice[];
   topCategories: { category: string; label: string; total: number }[];
+  /** Statistiques du jour (ventes, encaissements) */
+  today: DashboardToday;
+  /** Répartition des factures de vente par statut de paiement */
+  statusCounts: { PAYE: number; PARTIEL: number; NON_PAYE: number };
+  /** Achats à crédit (Commerçant + Immo) */
+  credit: { count: number; total: number; paid: number; reste: number };
+}
+
+export interface DashboardToday {
+  /** Total TTC des factures de vente du jour */
+  sales: number;
+  /** Somme des versements encaissés du jour (factures) */
+  received: number;
+  /** Nombre de factures de vente du jour */
+  invoiceCount: number;
+  /** Nombre de versements du jour */
+  paymentCount: number;
+  /** Nombre de proformas du jour */
+  proformaCount: number;
+}
+
+// ─── Rapport du jour ────────────────────────────────────────────────────────
+
+export interface DailyPaymentRow {
+  id: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  note?: string | null;
+  invoiceNumber: string;
+  clientName: string;
+}
+
+export interface DailyCreditPaymentRow {
+  id: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  note?: string | null;
+  number: string;
+  tier: string;
+  destination: "COMMERCANT" | "IMMO";
+}
+
+export interface DailyReport {
+  date: string;
+  summary: {
+    invoiceCount: number;
+    proformaCount: number;
+    totalHT: number;
+    totalTTC: number;
+    vatTotal: number;
+    /** Somme des versements factures encaissés ce jour */
+    receivedTotal: number;
+    /** Somme des règlements crédit (Commerçant + Immo) ce jour */
+    creditPaidTotal: number;
+    paidCount: number;
+    partialCount: number;
+    unpaidCount: number;
+  };
+  invoices: Invoice[];
+  payments: DailyPaymentRow[];
+  creditPayments: DailyCreditPaymentRow[];
+  byMethod: { method: string; label: string; amount: number; count: number }[];
 }
 
 // ─── Paramètres société ─────────────────────────────────────────────────────

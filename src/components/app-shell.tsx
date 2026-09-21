@@ -87,20 +87,20 @@ const NAV: {
 }[] = [
   // ─── Pilotage ───
   { id: "dashboard", label: "Tableau de bord", short: "Dashboard", icon: LayoutDashboard, section: "Pilotage" },
+  { id: "rapports", label: "Rapports de vente", short: "Rapports", icon: BarChart3, section: "Pilotage" },
   // ─── Ventes ───
   { id: "factures", label: "Factures", short: "Factures", icon: FileText, section: "Ventes" },
   { id: "proforma", label: "Factures proforma", short: "Proforma", icon: FileSignature, section: "Ventes" },
   { id: "commandes", label: "Commandes prévisionnelles", short: "Commandes", icon: ClipboardList, section: "Ventes" },
   { id: "clients", label: "Clients", short: "Clients", icon: Users2, section: "Ventes" },
-  { id: "rapports", label: "Rapports de vente", short: "Rapports", icon: BarChart3, section: "Ventes" },
+  // ─── Crédits (achats à crédit) ───
+  { id: "commercant", label: "Commerçant — Achats à crédit", short: "Commerçant", icon: Store, section: "Crédits" },
+  { id: "immo", label: "Immo — Achats à crédit", short: "Immo", icon: Building2, section: "Crédits" },
   // ─── Achats & stock ───
   { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag, section: "Achats & stock" },
   { id: "fournisseurs", label: "Fournisseurs", short: "Fournisseurs", icon: Truck, section: "Achats & stock" },
-  { id: "commercant", label: "Commerçant — Achats à crédit", short: "Commerçant", icon: Store, section: "Achats & stock" },
   { id: "produits", label: "Produits & stock", short: "Produits", icon: Package, section: "Achats & stock" },
   { id: "mouvements", label: "Mouvements de stock", short: "Mouvements", icon: ArrowLeftRight, section: "Achats & stock" },
-  // ─── Immobilier ───
-  { id: "immo", label: "Immo — Achats à crédit", short: "Immo", icon: Building2, section: "Immobilier" },
   // ─── Administration (admin uniquement) ───
   { id: "utilisateurs", label: "Utilisateurs & rôles", short: "Utilisateurs", icon: ShieldCheck, section: "Administration", adminOnly: true },
   { id: "audit", label: "Journal d'audit", short: "Audit", icon: History, section: "Administration", adminOnly: true },
@@ -313,6 +313,8 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authState, setAuthState] = useState<"loading" | "anon" | "auth">("loading");
+  // Signal : ouvrir directement la page « Nouvelle facture » (bouton du tableau de bord)
+  const [pendingNewInvoice, setPendingNewInvoice] = useState(false);
   const { settings, load: loadSettings } = useSettingsStore();
   // Évite la mismatch d'ID Radix (useId) entre SSR et client au premier rendu
   const mounted = useSyncExternalStore(
@@ -343,6 +345,12 @@ export function AppShell() {
     setView(id);
     setMobileOpen(false);
     window.scrollTo({ top: 0 });
+  };
+
+  // Depuis le tableau de bord : bascule sur Factures puis ouvre la page de création
+  const newInvoice = () => {
+    setPendingNewInvoice(true);
+    select("factures");
   };
 
   // ─── Écran de chargement de session ───────────────────────────────────────
@@ -445,8 +453,16 @@ export function AppShell() {
 
           <main className="flex-1 min-w-0 bg-background">
             <div className="mx-auto max-w-6xl px-3 sm:px-6 py-5 sm:py-7 pb-10">
-              {view === "dashboard" && <DashboardView onNavigate={(v) => select(v as ViewId)} />}
-              {view === "factures" && <InvoicesView type="VENTE" />}
+              {view === "dashboard" && (
+                <DashboardView onNavigate={(v) => select(v as ViewId)} onNewInvoice={newInvoice} />
+              )}
+              {view === "factures" && (
+                <InvoicesView
+                  type="VENTE"
+                  autoOpenNew={pendingNewInvoice}
+                  onAutoOpenNewConsumed={() => setPendingNewInvoice(false)}
+                />
+              )}
               {view === "proforma" && <InvoicesView type="PROFORMA" />}
               {view === "commandes" && <OrdersView />}
               {view === "achats" && <PurchasesView />}
