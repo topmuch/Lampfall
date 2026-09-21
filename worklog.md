@@ -400,3 +400,28 @@ Stage Summary:
 - La facture PDF ne montre plus jamais de statut négatif : adaptée à l'envoi client.
 - Le statut de livraison affiché dans Commerçant/Immo reste synchronisé avec la facture d'origine (join API, pas de copie figée).
 - Rappel sécurité : le token GitHub fourni a circulé en clair → à révoquer après le push.
+
+---
+Task ID: 13
+Agent: Z.ai Code (principal)
+Task: Lot de 4 demandes — 1) simplifier l'édition de facture (page trop longue) ; 2) barre de recherche de produits dans la création de facture ; 3) création rapide de client et de produit depuis la création de facture ; 4) import de produits par Excel/CSV dans l'onglet Produits.
+
+Work Log:
+- `items-editor.tsx` réécrit : le sélecteur Select est remplacé par une **barre de recherche** (Popover + Command/cmdk, recherche par nom ou référence, affiche prix + stock + unité par produit) ; entrée « Créer un produit… » dans les résultats (avec le terme saisi présaisi) + lien discret sous le tableau ; nouveau prop `onCreateProduct`.
+- `invoice-editor.tsx` refondu en **layout compact 2 colonnes** (max-w-6xl, lg:grid-cols-[1fr_360-400px]) :
+  - Colonne principale = carte Articles (recherche + table) avec **totaux intégrés** en pied de carte (HT / TVA % + montant / TTC) — supprime les cartes « Totaux » et « Options & notes » séparées ;
+  - Colonne latérale = Client (avec bouton « Créer ») + Paramètres (dates, livraison, paiement, montant payé conditionnel, décrémenter stock) + Classement du crédit (radio-cards compactes) + Notes ;
+  - Badge « Total TTC » en direct dans le header ; rangée d'actions bas de page supprimée (header suffit) ; page ≈ 1,5 écran au lieu de 4+.
+  - `QuickClientDialog` : création rapide de client (nom, téléphone, type, adresse) → POST /api/clients → ajout à la liste locale + auto-sélection (nom/tél/adresse remplis).
+  - `QuickProductDialog` : création rapide de produit (désignation pré-remplie avec le terme recherché, catégorie avec repli statique PRODUCT_CATEGORIES si la base est vide, prix achat/vente, stock initial, unité) → POST /api/products → ajout au catalogue local + insertion automatique dans la facture.
+- Nouveau `product-import-dialog.tsx` + bouton « Importer » dans `products-view.tsx` :
+  - Parsing via **xlsx** (SheetJS) : .xlsx/.xls/.csv ; mapping souple des en-têtes (accents/casse/espaces insensibles, alias FR/EN : nom/désignation/produit, référence/ref, catégorie/famille, prix achat/vente, stock/quantité, unité, stock min/seuil) ;
+  - Bouton **Modèle CSV** téléchargeable ; aperçu paginé avec statut par ligne (OK / Nom manquant / Catégorie inconnue) ; catégorie par défaut applicable aux vides/inconnues ; import séquentiel avec compteur de progression ; stock initial enregistré automatiquement comme mouvement d'entrée (comportement API) ; toast + bandeau résultat ; rafraîchit produits + catégories.
+- Ajouté `xlsx` à package.json.
+- Tests agent-browser (1440×900 + 390 mobile) : éditeur compact rendu ; recherche « ciment » → Ciment 50kg ajouté au prix ; client « Fatou Ndiaye Boutique » créé et auto-sélectionné ; produit « Peinture blanche 5L » créé et inséré (totaux 9 500 / 1 710 / 11 210) ; facture FV-2026-0004 créée depuis le nouvel éditeur ; import CSV de 4 produits → aperçu 4/4 valides → « 4 produit(s) créé(s) », compteur Références 2→6, produits et mouvements visibles ; mobile OK (colonnes empilées, table défilante) ; lint 0 erreur ; dev.log sans erreur.
+
+Stage Summary:
+- La création/édition de facture tient désormais sur ~1,5 écran avec recherche de produits et créations rapides intégrées — plus besoin de quitter la page pour ajouter un client ou un produit.
+- L'import Excel/CSV permet d'alimenter le catalogue en masse avec validation avant import.
+- Découverte utile : la table Category en base est vide (l'app utilise le repli statique) — l'import et le quick-create gèrent ce cas.
+- Données de test créées pendant la vérification : client Fatou Ndiaye Boutique, facture FV-2026-0004 (11 210 FCFA), produits Robinet mélangeur / Câble électrique 2.5mm / Ampoule LED 12W / Tube PVC 100mm.

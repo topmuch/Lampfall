@@ -38,6 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertTriangle,
   FileDown,
+  FileSpreadsheet,
   FolderPlus,
   ImagePlus,
   MoreHorizontal,
@@ -51,6 +52,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
+import { ProductImportDialog } from "@/components/product-import-dialog";
 import { formatMoney, toISODate } from "@/lib/constants";
 import { authFetch } from "@/lib/auth-client";
 import { buildRestockOrderPDF, downloadPDF } from "@/lib/pdf";
@@ -133,6 +135,7 @@ export function ProductsView() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
 
@@ -412,6 +415,9 @@ export function ProductsView() {
           </Button>
           <Button size="sm" variant="outline" onClick={() => setCatDialogOpen(true)}>
             <Tags className="h-4 w-4" /> Catégories
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4" /> Importer
           </Button>
           <Button
             size="sm"
@@ -916,6 +922,16 @@ export function ProductsView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import de produits par Excel / CSV */}
+      <ProductImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={() => {
+          refetch();
+          refetchCategories();
+        }}
+      />
     </div>
   );
 }

@@ -1,16 +1,21 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Trash2 } from "lucide-react";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import { ChevronsUpDown, PackagePlus, Plus, Search, Trash2 } from "lucide-react";
 import { formatMoney } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
 export interface DraftItem {
@@ -50,6 +55,8 @@ interface ItemsEditorProps {
   products: Product[];
   priceField?: "salePrice" | "purchasePrice";
   disabled?: boolean;
+  /** Ouvre le dialogue de création rapide de produit (optionnel). */
+  onCreateProduct?: (searchTerm: string) => void;
 }
 
 export function ItemsEditor({
@@ -58,14 +65,16 @@ export function ItemsEditor({
   products,
   priceField = "salePrice",
   disabled = false,
+  onCreateProduct,
 }: ItemsEditorProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
   const update = (index: number, patch: Partial<DraftItem>) => {
     onChange(items.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   };
 
-  const addFromCatalog = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
+  const addFromCatalog = (product: Product) => {
     onChange([
       ...items,
       {
@@ -77,26 +86,96 @@ export function ItemsEditor({
         unitPrice: String(product[priceField]),
       },
     ]);
+    setPickerOpen(false);
+    setSearch("");
   };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.reference ?? "").toLowerCase().includes(q)
+    );
+  }, [products, search]);
 
   const lineTotal = (it: DraftItem) =>
     (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0);
 
   return (
     <div className="space-y-2">
+      {/* ─── Barre de recherche de produits ─── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Select onValueChange={addFromCatalog} value="" disabled={disabled}>
-          <SelectTrigger className="w-full sm:w-[340px]" aria-label="Ajouter un produit du catalogue">
-            <SelectValue placeholder="＋ Ajouter depuis le catalogue…" />
-          </SelectTrigger>
-          <SelectContent className="max-h-72">
-            {products.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name} — {formatMoney(p[priceField])}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={pickerOpen}
+              aria-label="Rechercher un produit du catalogue"
+              disabled={disabled}
+              className="h-10 w-full justify-start gap-2 sm:w-[360px]"
+            >
+              <Search className="h-4 w-4 text-muted-foreground" aria-hidden />
+              <span className="text-muted-foreground font-normal">
+                Rechercher un produit…
+              </span>
+              <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Nom ou référence du produit…"
+                value={search}
+                onValueChange={setSearch}
+              />
+              <CommandList className="max-h-64">
+                <CommandEmpty>
+                  Aucun produit trouvé
+                  {search.trim() ? ` pour « ${search.trim()} »` : ""}.
+                </CommandEmpty>
+                <CommandGroup>
+                  {filtered.map((p) => (
+                    <CommandItem
+                      key={p.id}
+                      value={p.id}
+                      onSelect={() => addFromCatalog(p)}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                        <span className="min-w-0 truncate font-medium">{p.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                          {formatMoney(p[priceField])} · stock {p.stock} {p.unit}
+                        </span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                {onCreateProduct && (
+                  <>
+                    <CommandSeparator />
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create__"
+                        onSelect={() => {
+                          setPickerOpen(false);
+                          onCreateProduct(search.trim());
+                        }}
+                        className="cursor-pointer text-primary"
+                      >
+                        <PackagePlus className="h-4 w-4" aria-hidden />
+                        Créer un produit{search.trim() ? ` « ${search.trim()} »` : ""}…
+                      </CommandItem>
+                    </CommandGroup>
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
         <span className="text-xs text-muted-foreground">
           ou saisissez un article libre ci-dessous
         </span>
@@ -104,7 +183,7 @@ export function ItemsEditor({
 
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">
-          Aucun article. Ajoutez un produit du catalogue ou un article libre.
+          Aucun article. Recherchez un produit du catalogue ou saisissez un article libre.
         </p>
       ) : (
         <div className="rounded-md border overflow-x-auto">
@@ -173,7 +252,7 @@ export function ItemsEditor({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      className={cn("h-8 w-8 text-muted-foreground hover:text-destructive")}
                       onClick={() => onChange(items.filter((_, i) => i !== idx))}
                       disabled={disabled}
                       aria-label={`Supprimer l'article ${it.productName || idx + 1}`}
@@ -186,6 +265,19 @@ export function ItemsEditor({
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Rappel discret : création rapide */}
+      {onCreateProduct && (
+        <button
+          type="button"
+          onClick={() => onCreateProduct("")}
+          disabled={disabled}
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          Créer un produit
+        </button>
       )}
     </div>
   );
