@@ -31,12 +31,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Bell,
+  CreditCard,
   Download,
   Eye,
   FileDown,
   MoreHorizontal,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   Repeat1,
   Search,
@@ -48,7 +50,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
 import { formatMoney } from "@/lib/constants";
-import type { Client, Invoice, Product } from "@/lib/types";
+import type { Client, CreditPurchase, Invoice, Product } from "@/lib/types";
 import {
   DeliveryBadge,
   PaymentBadge,
@@ -60,8 +62,10 @@ import {
   buildDeliveryNotePDF,
   buildInvoiceListPDF,
   openPDF,
+  printInvoiceA4,
   saveOrOpenInvoicePDF,
 } from "@/lib/pdf";
+import { TransferCreditDialog } from "@/components/transfer-credit-dialog";
 
 interface InvoicesViewProps {
   type: "VENTE" | "PROFORMA";
@@ -109,6 +113,11 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
   const [shareInvoice, setShareInvoice] = useState<Invoice | null>(null);
   const [shareMode, setShareMode] = useState<"relance" | "envoi">("relance");
   const [paymentsInvoice, setPaymentsInvoice] = useState<Invoice | null>(null);
+
+  // Transfert en achat à crédit (Commerçant / Immo)
+  const [transferTarget, setTransferTarget] = useState<Invoice | null>(null);
+  const { data: transfers, refetch: refetchTransfers } = useFetch<CreditPurchase[]>("/api/credit-purchases");
+  const transferredIds = useMemo(() => new Set((transfers ?? []).map((t) => t.sourceId)), [transfers]);
 
   const totals = useMemo(() => {
     const list = invoices ?? [];
@@ -208,6 +217,18 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
       toast({
         title: "Erreur PDF",
         description: "Génération du bon de livraison impossible.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePrintA4 = async (inv: Invoice) => {
+    try {
+      await printInvoiceA4(inv);
+    } catch {
+      toast({
+        title: "Erreur impression",
+        description: "Lancement de l'impression impossible.",
         variant: "destructive",
       });
     }
@@ -375,7 +396,19 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
               <TableBody>
                 {invoices.map((inv) => (
                   <TableRow key={inv.id}>
-                    <TableCell className="font-medium">{inv.number}</TableCell>
+                    <TableCell className="font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        {inv.number}
+                        {transferredIds.has(inv.id) && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary"
+                            title="Transférée en achat à crédit"
+                          >
+                            <CreditCard className="h-3 w-3" aria-hidden /> Crédit
+                          </span>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {new Date(inv.date).toLocaleDateString("fr-FR")}
                     </TableCell>
@@ -408,6 +441,9 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handlePDF(inv, "download")}>
                             <Download className="h-4 w-4" /> Télécharger le PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handlePrintA4(inv)}>
+                            <Printer className="h-4 w-4" /> Imprimer (A4)
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEdit(inv)}>
                             <Pencil className="h-4 w-4" /> Modifier
@@ -445,6 +481,9 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
                               <Repeat1 className="h-4 w-4" /> Convertir en facture
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem onClick={() => setTransferTarget(inv)}>
+                            <CreditCard className="h-4 w-4" /> Transférer en achat à crédit
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => setDeleting(inv)}
@@ -488,6 +527,14 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
         open={paymentsInvoice !== null}
         onOpenChange={(v) => !v && setPaymentsInvoice(null)}
         onUpdated={refetch}
+      />
+
+      {/* Dialog transfert en achat à crédit (Commerçant / Immo) */}
+      <TransferCreditDialog
+        invoice={transferTarget}
+        open={transferTarget !== null}
+        onOpenChange={(v) => !v && setTransferTarget(null)}
+        onTransferred={() => refetchTransfers()}
       />
 
       {/* Confirmation suppression */}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, Wallet } from "lucide-react";
+import { Loader2, Plus, Receipt, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-client";
+import { printPaymentTicket80 } from "@/lib/pdf";
 import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants";
 import type { Invoice, Payment } from "@/lib/types";
 
@@ -145,6 +146,19 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
     }
   };
 
+  const printTicket = async (p: Payment) => {
+    if (!current) return;
+    try {
+      await printPaymentTicket80(p, current);
+    } catch {
+      toast({
+        title: "Erreur",
+        description: "Impression du ticket impossible",
+        variant: "destructive",
+      });
+    }
+  };
+
   const removePayment = async (p: Payment) => {
     setDeletingId(p.id);
     try {
@@ -252,6 +266,17 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
                           </p>
                         )}
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => printTicket(p)}
+                        disabled={deletingId === p.id}
+                        aria-label={`Imprimer le ticket 80 mm du versement du ${formatDate(p.paidAt)}`}
+                        title="Imprimer le ticket 80 mm"
+                      >
+                        <Receipt className="h-4 w-4" aria-hidden />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

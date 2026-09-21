@@ -105,6 +105,33 @@ export interface Payment {
   createdAt: string;
 }
 
+// ─── Achats à crédit (factures / proformas transférées) ─────────────────────
+
+export interface CreditPayment {
+  id: string;
+  purchaseId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface CreditPurchase {
+  id: string;
+  destination: "COMMERCANT" | "IMMO";
+  sourceType: "VENTE" | "PROFORMA";
+  sourceId: string;
+  number: string;
+  tier: string;
+  total: number;
+  amountPaid: number;
+  dueDate?: string | null;
+  note?: string | null;
+  createdAt: string;
+  payments?: CreditPayment[];
+}
+
 export interface PurchaseItem {
   id?: string;
   productId?: string | null;

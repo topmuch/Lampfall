@@ -34,6 +34,7 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   ShoppingBag,
+  Store,
   Truck,
   Users2,
 } from "lucide-react";
@@ -45,7 +46,7 @@ import { ClientsView } from "@/components/clients-view";
 import { ProductsView } from "@/components/products-view";
 import { PurchasesView } from "@/components/purchases-view";
 import { OrdersView } from "@/components/orders-view";
-import { ImmoView } from "@/components/immo-view";
+import { CreditPurchasesView } from "@/components/credit-purchases-view";
 import { ReportsView } from "@/components/reports-view";
 import { SuppliersView } from "@/components/suppliers-view";
 import { StockMovementsView } from "@/components/stock-movements-view";
@@ -68,6 +69,7 @@ type ViewId =
   | "rapports"
   | "achats"
   | "fournisseurs"
+  | "commercant"
   | "produits"
   | "mouvements"
   | "immo"
@@ -94,10 +96,11 @@ const NAV: {
   // ─── Achats & stock ───
   { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag, section: "Achats & stock" },
   { id: "fournisseurs", label: "Fournisseurs", short: "Fournisseurs", icon: Truck, section: "Achats & stock" },
+  { id: "commercant", label: "Commerçant — Achats à crédit", short: "Commerçant", icon: Store, section: "Achats & stock" },
   { id: "produits", label: "Produits & stock", short: "Produits", icon: Package, section: "Achats & stock" },
   { id: "mouvements", label: "Mouvements de stock", short: "Mouvements", icon: ArrowLeftRight, section: "Achats & stock" },
   // ─── Immobilier ───
-  { id: "immo", label: "Immobilier — Loyers", short: "Immo", icon: Building2, section: "Immobilier" },
+  { id: "immo", label: "Immo — Achats à crédit", short: "Immo", icon: Building2, section: "Immobilier" },
   // ─── Administration (admin uniquement) ───
   { id: "utilisateurs", label: "Utilisateurs & rôles", short: "Utilisateurs", icon: ShieldCheck, section: "Administration", adminOnly: true },
   { id: "audit", label: "Journal d'audit", short: "Audit", icon: History, section: "Administration", adminOnly: true },
@@ -448,11 +451,12 @@ export function AppShell() {
               {view === "commandes" && <OrdersView />}
               {view === "achats" && <PurchasesView />}
               {view === "fournisseurs" && <SuppliersView />}
+              {view === "commercant" && <CreditPurchasesView destination="COMMERCANT" />}
               {view === "clients" && <ClientsView />}
               {view === "rapports" && <ReportsView />}
               {view === "produits" && <ProductsView />}
               {view === "mouvements" && <StockMovementsView />}
-              {view === "immo" && <ImmoView />}
+              {view === "immo" && <CreditPurchasesView destination="IMMO" />}
               {view === "utilisateurs" && (isAdmin ? <UsersView currentUser={user} /> : <RestrictedCard />)}
               {view === "audit" && (isAdmin ? <AuditView /> : <RestrictedCard />)}
               {view === "parametres" && (isAdmin ? <SettingsView /> : <RestrictedCard />)}

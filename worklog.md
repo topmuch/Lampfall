@@ -312,3 +312,26 @@ Work Log:
 Stage Summary:
 - Page de connexion premium engageante : animations d'entrée en cascade, fond aurora animé, micro-interactions (œil, Verr. Maj, shine, flèche), thème vert & or cohérent clair/sombre/mobile.
 - Aucun changement d'API ni de comportement d'authentification ; props inchangées.
+
+---
+Task ID: 10
+Agent: Z.ai Code (orchestrateur)
+Task: Impression (A4 + ticket 80mm), onglet Commerçant, transfert factures/proformas en achats à crédit, remplacement du contenu de l'onglet Immo
+
+Work Log:
+- Prisma : nouveaux modèles CreditPurchase (destination COMMERCANT|IMMO, sourceType, sourceId @unique anti-doublon, number, tier, total, amountPaid, dueDate, note) et CreditPayment (versements, cascade) ; bun run db:push OK.
+- API : /api/credit-purchases (GET filtrable par destination, POST transfert depuis facture/proforma avec contrôle d'existence + 409 si déjà transférée + audit), [id] (GET/DELETE = annulation du transfert), [id]/payments (GET/POST avec incrément amountPaid), [id]/payments/[paymentId] (DELETE avec décrément) ; audit journalisé.
+- Impression (src/lib/pdf.ts) :
+  * printPDF(doc) : PDF dans iframe masqué + doc.autoPrint() + window.print() → boîte de dialogue navigateur, marche avec toute imprimante installée (A4). printInvoiceA4(invoice) helper.
+  * Ticket 80 mm (printTicket80/printPaymentTicket80) : reçu de versement HTML @page size 80mm auto, en-tête société (loadCompanyInfo), document, client, date/heure, mode, MONTANT REÇU en grand, total/versé/reste, « Merci de votre confiance » ; imprimé via iframe srcdoc (imprimante thermique 80mm).
+- UI factures & proforma (invoices-view.tsx) : menu « Imprimer (A4) » (les deux types) et « Transférer en achat à crédit » ; badge vert « Crédit » sur les documents déjà transférés (liste /api/credit-purchases en cache) ; nouveau TransferCreditDialog (choix destination Commerçant/Immobilier en cartes radio, tiers prérempli du client, échéance, note).
+- UI versements (payments-dialog.tsx) : bouton « Imprimer le ticket 80 mm » (icône Receipt) sur chaque ligne de versement.
+- Nouvelle vue partagée credit-purchases-view.tsx : KPI (nb, total dû, réglé, reste), recherche, table (document + type, tiers, échéance, total/réglé/reste, statut PAYE/PARTIEL/NON_PAYE), dialog versements multiples (montant/méthode/date/note, historique, suppression), annulation du transfert avec confirmation.
+- Navigation (app-shell.tsx) : ViewId « commercant » ; NAV ajoute « Commerçant — Achats à crédit » (icône Store, section Achats & stock) ; onglet Immo renommé « Immo — Achats à crédit » ; ImmoView retiré du rendu (les deux onglets rendent CreditPurchasesView avec destination COMMERCANT/IMMO) ; immo-view.tsx supprimé (locataires/loyers — modules API et modèles Tenant/Rent conservés en base, vides, pour restauration éventuelle).
+- Infra : le serveur dev tué/redémarré pour recharger le client Prisma ; démarrage persistant trouvé : `( setsid bun run dev </dev/null >/dev/null 2>&1 & )` (survit entre les appels shell).
+- Tests (curl + agent-browser) : API transfert OK, 409 sur doublon, versement + recalc OK ; UI : login, badge Crédit, menu complet, dialog transfert (capture), registre Commerçant (76 700 dû / 20 000 réglé / reste 56 700, Partiel), versement UI 15 000 → 35 000 réglé / reste 41 700, registre Immo (PF SOCOCIM 100 300 Non payé), ticket 80 mm et Imprimer A4 cliqués sans erreur JS. Lint 0/0 ; tsc : aucune erreur dans les fichiers nouveaux/modifiés.
+
+Stage Summary:
+- Impression opérationnelle : factures/proformas en A4 via navigateur ; reçus de versement en ticket 80 mm pour imprimante thermique.
+- Achats à crédit : toute facture ou proforma peut être transférée vers l'onglet Commerçant ou Immo, avec suivi des versements et du solde ; anti-doublon ; annulation possible.
+- Onglet Immo : ancien contenu locataires/loyers retiré de l'affichage, remplacé par le registre des achats à crédit immobilier ; onglet Commerçant créé.

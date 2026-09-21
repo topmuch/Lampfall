@@ -8,6 +8,7 @@ import {
   DELIVERY_LABELS,
   ORDER_STATUS_LABELS,
   PAYMENT_LABELS,
+  PAYMENT_METHOD_LABELS,
   RENT_STATUS_LABELS,
   monthLabel,
 } from "./constants";
@@ -1246,6 +1247,149 @@ export async function saveOrOpenInvoicePDF(invoice: Invoice, action: "download" 
   const filename = `${invoice.type === "PROFORMA" ? "Proforma" : "Facture"}-${invoice.number}.pdf`;
   if (action === "download") downloadPDF(doc, filename);
   else openPDF(doc);
+}
+
+// ─── Impression directe (A4) ────────────────────────────────────────────────
+
+/**
+ * Imprime un document PDF via la boîte de dialogue du navigateur :
+ * le PDF est chargé dans un iframe masqué puis window.print() est appelé.
+ * Fonctionne avec toute imprimante installée sur la machine (A4, laser, jet d'encre…).
+ */
+export function printPDF(doc: jsPDF): void {
+  try {
+    doc.autoPrint();
+  } catch {
+    /* non bloquant */
+  }
+  const blob = doc.output("blob");
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.setAttribute("title", "Impression");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;";
+  iframe.src = url;
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // Repli : ouvre le PDF dans un onglet (impression manuelle)
+      window.open(url, "_blank");
+    } finally {
+      window.setTimeout(() => {
+        iframe.remove();
+        URL.revokeObjectURL(url);
+      }, 60_000);
+    }
+  };
+  document.body.appendChild(iframe);
+}
+
+/** Génère la facture / proforma complète et lance l'impression A4. */
+export async function printInvoiceA4(invoice: Invoice): Promise<void> {
+  const doc = await buildInvoicePDF(invoice);
+  printPDF(doc);
+}
+
+// ─── Ticket de versement 80 mm (imprimante thermique) ───────────────────────
+
+function ticketEsc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Imprime un ticket 80 mm : le HTML (avec @page size 80mm) est imprimé via un iframe masqué. */
+export function printTicket80(html: string): void {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.setAttribute("title", "Ticket 80mm");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;";
+  iframe.srcdoc = html;
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      /* certains navigateurs bloquent : non bloquant */
+    } finally {
+      window.setTimeout(() => iframe.remove(), 60_000);
+    }
+  };
+  document.body.appendChild(iframe);
+}
+
+/** Reçu de versement au format ticket 80 mm (imprimante thermique). */
+export async function printPaymentTicket80(payment: Payment, invoice: Invoice): Promise<void> {
+  const info = await loadCompanyInfo();
+  const reste = Math.max(0, invoice.totalTTC - invoice.amountPaid);
+  const dateStr = new Date(payment.paidAt).toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const methodLabel = PAYMENT_METHOD_LABELS[payment.method] ?? payment.method;
+
+  const line = `<div class="sep"></div>`;
+  const html = `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Recu ${ticketEsc(invoice.number)}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 80mm;
+    padding: 4mm 5mm;
+    font-family: "Courier New", ui-monospace, monospace;
+    font-size: 3.4mm;
+    line-height: 1.45;
+    color: #000;
+    background: #fff;
+  }
+  .center { text-align: center; }
+  .bold { font-weight: 700; }
+  .shop { font-size: 4.4mm; font-weight: 800; letter-spacing: 0.3mm; }
+  .small { font-size: 2.9mm; }
+  .sep { border-top: 1px dashed #000; margin: 2mm 0; }
+  .row { display: flex; justify-content: space-between; gap: 2mm; }
+  .amount { font-size: 5.6mm; font-weight: 800; margin-top: 1mm; }
+  .thanks { margin-top: 3mm; }
+</style>
+</head>
+<body>
+  <div class="center">
+    <div class="shop">${ticketEsc(info.name)}</div>
+    ${info.tagline ? `<div class="small">${ticketEsc(info.tagline)}</div>` : ""}
+    ${info.address ? `<div class="small">${ticketEsc(info.address)}</div>` : ""}
+    ${info.phone ? `<div class="small">Tél : ${ticketEsc(info.phone)}</div>` : ""}
+    ${info.rc || info.ninea ? `<div class="small">${info.rc ? "RC : " + ticketEsc(info.rc) : ""}${info.rc && info.ninea ? " — " : ""}${info.ninea ? "NINEA : " + ticketEsc(info.ninea) : ""}</div>` : ""}
+  </div>
+  ${line}
+  <div class="center bold">REÇU DE VERSEMENT</div>
+  ${line}
+  <div class="row"><span>Document</span><span class="bold">${ticketEsc(invoice.number)}</span></div>
+  <div class="row"><span>Client</span><span>${ticketEsc(invoice.clientName || "Client comptoir")}</span></div>
+  <div class="row"><span>Date</span><span>${dateStr}</span></div>
+  <div class="row"><span>Mode</span><span>${ticketEsc(methodLabel)}</span></div>
+  ${payment.note ? `<div class="small">Note : ${ticketEsc(payment.note)}</div>` : ""}
+  ${line}
+  <div class="center">
+    <div class="bold">MONTANT REÇU</div>
+    <div class="amount">${fmtMoney(payment.amount)}</div>
+  </div>
+  ${line}
+  <div class="row"><span>Total facture</span><span>${fmtMoney(invoice.totalTTC)}</span></div>
+  <div class="row"><span>Total versé</span><span>${fmtMoney(invoice.amountPaid)}</span></div>
+  <div class="row bold"><span>Reste à payer</span><span>${fmtMoney(reste)}</span></div>
+  ${line}
+  <div class="center small thanks">Merci de votre confiance !</div>
+</body>
+</html>`;
+
+  printTicket80(html);
 }
 
 // ─── Historique des achats d'un client ──────────────────────────────────

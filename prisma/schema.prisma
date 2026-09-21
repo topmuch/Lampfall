@@ -181,6 +181,35 @@ model Rent {
   @@unique([tenantId, month])
 }
 
+// ─── Achats à crédit (factures / proformas transférées) ─────────────────────
+
+model CreditPurchase {
+  id          String    @id @default(cuid())
+  destination String // COMMERCANT | IMMO
+  sourceType  String // VENTE | PROFORMA (type du document d'origine)
+  sourceId    String    @unique // un document ne peut être transféré qu'une fois
+  number      String // numéro du document d'origine
+  tier        String // commerçant / bailleur concerné
+  total       Float     @default(0)
+  amountPaid  Float     @default(0)
+  dueDate     DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  payments CreditPayment[]
+}
+
+model CreditPayment {
+  id         String         @id @default(cuid())
+  purchaseId String
+  purchase   CreditPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  amount     Float
+  method     String         @default("ESPECES") // ESPECES | WAVE | ORANGE_MONEY | FREE_MONEY | VIREMENT | CHEQUE
+  paidAt     DateTime       @default(now())
+  note       String?
+  createdAt  DateTime       @default(now())
+}
+
 // ─── Versements (paiements multiples par facture) ───────────────────────────
 
 model Payment {
