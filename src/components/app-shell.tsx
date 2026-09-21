@@ -171,7 +171,7 @@ function CompanyLogo({ size = 40 }: { size?: number }) {
   }
   return (
     <Image
-      src="/logo.png"
+      src="/logo-violet.png"
       alt="Logo Lampe Fall"
       width={size}
       height={Math.round(size * 0.854)}

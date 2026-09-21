@@ -51,7 +51,7 @@ export function LoginView({ settings, onSuccess }: { settings: Settings | null; 
                
               <img src={settings.logo} alt={`Logo ${settings.nomSociete}`} className="h-24 w-24 object-contain" />
             ) : (
-              <Image src="/logo.png" alt="Logo Lampe Fall" width={96} height={96} className="h-24 w-auto object-contain" />
+              <Image src="/logo-violet.png" alt="Logo Lampe Fall" width={96} height={96} className="h-24 w-auto object-contain" />
             )}
           </div>
           <div className="text-center">
@@ -84,7 +84,7 @@ export function LoginView({ settings, onSuccess }: { settings: Settings | null; 
                  
                 <img src={settings.logo} alt="" className="h-14 w-14 object-contain" />
               ) : (
-                <Image src="/logo.png" alt="" width={56} height={56} className="h-14 w-auto object-contain" />
+                <Image src="/logo-violet.png" alt="" width={56} height={56} className="h-14 w-auto object-contain" />
               )}
             </div>
             <p className="font-bold text-lg text-luxe-gradient">{settings?.nomSociete ?? "LAMPE FALL"}</p>

@@ -290,7 +290,7 @@ export function SettingsView() {
                  
                 <img src={settings.logo} alt="Logo de la société" className="h-full w-full object-contain p-2" />
               ) : (
-                <Image src="/logo.png" alt="Logo par défaut" width={120} height={120} className="h-full w-full object-contain p-3 opacity-80" />
+                <Image src="/logo-violet.png" alt="Logo par défaut" width={120} height={120} className="h-full w-full object-contain p-3 opacity-80" />
               )}
             </div>
             <div className="flex gap-2">

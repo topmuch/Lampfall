@@ -256,3 +256,20 @@ Stage Summary:
 - GitHub `topmuch/Lampfall` synchronisé avec la version locale (tête 4093b74 puis commit Dockerfile).
 - `Dockerfile` Coolify prêt à la racine : clone du dépôt → bun install → prisma generate → bun run build (standalone) → au démarrage : prisma db push + seed admin/admin123 + node .next/standalone/server.js sur 0.0.0.0:3000.
 - Volume persistant requis : /app/data (base SQLite). Optionnel : /app/db (pièces jointes des achats).
+
+---
+Task ID: 7
+Agent: Z.ai Code (orchestrateur)
+Task: Harmonisation de la couleur du logo (vert → violet thème du site)
+
+Work Log:
+- Palette du site identifiée : primaire oklch(0.46 0.19 296) (clair) / oklch(0.72 0.17 296) (sombre) → conversion sRGB = #6533b3, teinte HSL 263,4°.
+- Recolorage pixel (Python/PIL/NumPy) : sélection des pixels verts (teinte 60-200°, sat > 0,06) des deux PNG, décalage de teinte vers 263,4° avec préservation des variations (deux tons : gouttes extérieures violet profond, goutte centrale violet moyen, trait sous-titre violet) ; texte noir, maison blanche et alpha intacts. Fichiers : public/logo.png, public/logo_small.png (+ copie public/logo-violet.png).
+- Debug approfondi du cache : le navigateur test continuait d'afficher l'ancien logo vert — identifié comme le cache HTTP Chromium des réponses /_next/image (Vary: Accept, entrées créées avant recolorage) ; le serveur et curl servaient déjà du violet. Solution robuste : nouveau nom d'actif /logo-violet.png + mise à jour des 6 références (login-view ×2, app-shell, settings-view, layout favicon, pdf.ts fallback) pour casser tous les caches (navigateurs des utilisateurs et futur déploiement Coolify).
+- Incident connexe traité : table User vide après la restauration sandbox du matin → seed-v3 rejoué (idempotent), login admin/admin123 OK. Base métier vide (0 factures/clients/produits) — données de test perdues à la restauration, indépendant du logo.
+- Vérifié via agent-browser : page de login (logo violet), dashboard clair (logo violet sidebar), mode sombre (contraste parfait sur carte blanche). Lint : 0 erreur.
+
+Stage Summary:
+- Logo ETS LAMP FALL désormais violet (harmonisé au thème luxe violet), design strictement inchangé.
+- Nouveau fichier public/logo-violet.png référencé partout (app + favicon + PDF) ; logo.png et logo_small.png également recolorés par cohérence.
+- Pour les déploiements : si un logo personnalisé est uploadé dans Paramètres, il prime sur le logo par défaut (comportement inchangé).
