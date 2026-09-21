@@ -130,6 +130,9 @@ export interface CreditPurchase {
   note?: string | null;
   createdAt: string;
   payments?: CreditPayment[];
+  /** Statuts du document source (facture / proforma d'origine) */
+  sourceDeliveryStatus?: string | null;
+  sourcePaymentStatus?: string | null;
 }
 
 export interface PurchaseItem {

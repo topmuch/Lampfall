@@ -358,3 +358,45 @@ Work Log:
 Stage Summary:
 - Les 8 demandes sont livrées et testées. Commit unique « Feature » à pousser (token GitHub compromis à révoquer — demander un token frais à l'utilisateur avant push).
 - Points de vigilance : le statut de paiement de la facture d'origine reste indépendant des règlements crédit (architecture existante) ; `printTicket80` et `printPDF` partagent le même mécanisme blob+iframe (fiable là où l'A4 marchait) ; l'aperçu ticket garantit un affichage visible même si l'impression est bloquée par le navigateur.
+
+---
+Task ID: 11
+Agent: Z.ai Code (principal)
+Task: Vérification finale du lot des 8 demandes dans le navigateur + push GitHub avec le token frais fourni par l'utilisateur.
+
+Work Log:
+- Lu le worklog : Task 10 déjà terminé (les 8 demandes implémentées, testées, committées en 68280a7), seul le push restait.
+- Vérifié l'état git : main 3 commits en avance, arbre propre ; serveur dev sain (API 200 dans dev.log).
+- Vérification agent-browser sur http://localhost:3000 :
+  - Connexion admin OK ; dashboard version large (sidebar réorganisé Pilotage/Ventes/Crédits/Achats & Stock/Administration, bouton Rapport du jour, bouton Nouvelle facture, table en-tête verte avec téléchargements PDF).
+  - Nouvelle facture : page plein écran (fixed inset-0) confirmée — l'éditeur couvre la liste ; contient les 3 radio-cards Vente normale / Commerçant / Immo.
+  - Factures : badges « Crédit · Commerçant » affichés.
+  - Onglet Commerçant : badge « Crédit », bouton « Télécharger la facture PDF » visible uniquement pour la facture Payée (FV-2026-0002), versements + annulation de transfert présents.
+  - Versements : bouton « Afficher le ticket 80 mm » ; aperçu affiché et capturé en screenshot (en-tête société, REÇU DE VERSEMENT, montant, Imprimer 80 mm) — bug f confirmé corrigé.
+- Push GitHub avec le token fourni en URL de commande (jamais stocké dans la config git) : `92eba71..68280a7 main -> main`.
+- ls-remote confirme : refs/heads/main = 68280a7 sur GitHub ; fetch pour rafraîchir origin/main → `## main...origin/main` synchronisé.
+
+Stage Summary:
+- Les 8 demandes sont vérifiées dans le navigateur et publiées sur GitHub (68280a7 sur origin/main).
+- Le token fourni a transité en clair dans la conversation et la commande : l'utilisateur doit le RÉVOQUER sur GitHub (Settings → Developer settings → Personal access tokens) après usage, ainsi que l'ancien ghp_6MkHl… déjà signalé.
+- Rien d'autre en attente côté code ; prochains travaux éventuels : nouvelles demandes utilisateur.
+
+---
+Task ID: 12
+Agent: Z.ai Code (principal)
+Task: Lot de 3 demandes — 1) retirer les mentions « Non livré / Non payé » de la facture PDF ; 2) afficher le statut de livraison du document source dans les onglets Commerçant/Immo ; 3) refonte page de connexion en 16:9 plein cadre ; + suppression des infos de connexion affichées sur la page de connexion (demande complémentaire).
+
+Work Log:
+- `src/lib/pdf.ts` (buildInvoicePDF) : watermark « IMPAYÉ » supprimé (seuls « PROFORMA » et « PAYÉ » subsistent) ; badges de statut affichés uniquement si positifs — « Payé / Partiel » et « Livré » — jamais « Non payé » ni « Non livré ».
+- `src/app/api/credit-purchases/route.ts` (GET) : enrichit chaque achat à crédit avec `sourceDeliveryStatus` / `sourcePaymentStatus` lus dans la facture d'origine (join sur sourceId, valeurs à jour en continu).
+- `src/lib/types.ts` : `CreditPurchase` étendu avec `sourceDeliveryStatus?` / `sourcePaymentStatus?`.
+- `src/components/credit-purchases-view.tsx` : colonne Statut = PaymentBadge + DeliveryBadge (statut de livraison de la facture source) → ex. « Non payé · Livré ».
+- `src/components/login-view.tsx` réécrite en **16:9 plein cadre** : split-screen edge-to-edge (panneau marque vert 58-60 % avec logo, nom géant, grille 2×2 de features, bandeaux haut/bas + aurores animées ; panneau formulaire 40-42 % centré, footer bas, safe-area iOS) ; **bloc « Première utilisation ? admin/admin123 » SUPPRIMÉ** (demande complémentaire) ; cascade framer-motion et toutes les fonctionnalités conservées (œil mdp, Verr. Maj, erreur animée).
+- Interruption prolongée des outils (shell indisponible) : des commits automatiques UUID ont été créés par l'infrastructure pendant la panne ; fusionnés en un commit propre via `git reset --soft 68280a7` avant publication (rien n'avait été poussé).
+- Tests agent-browser (1440×810 = 16:9) : page de connexion rendue plein cadre, sans identifiants, mobile 390 OK ; connexion admin → création facture FV-2026-0003 (client libre, Livré + Non payé, classement Commerçant) → badge « Crédit · Commerçant » dans Factures ; onglet Commerçant affiche « Non payé Livré » (FV-2026-0003), « Payé Non livré » (FV-2026-0002), « Partiel Non livré » (FV-2026-0001) ; PDF FV-2026-0003 téléchargé et texte extrait (pdftotext) : AUCUNE mention « Non payé / Non livré / IMPAYÉ », badge « Livré » présent, montants intacts ; lint 0 erreur.
+
+Stage Summary:
+- Les 4 demandes (3 + suppression infos de connexion) sont livrées et vérifiées de bout en bout.
+- La facture PDF ne montre plus jamais de statut négatif : adaptée à l'envoi client.
+- Le statut de livraison affiché dans Commerçant/Immo reste synchronisé avec la facture d'origine (join API, pas de copie figée).
+- Rappel sécurité : le token GitHub fourni a circulé en clair → à révoquer après le push.

@@ -45,7 +45,7 @@ import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
 import { authFetch } from "@/lib/auth-client";
 import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants";
 import { Search } from "lucide-react";
-import { PaymentBadge } from "@/components/status-badges";
+import { PaymentBadge, DeliveryBadge } from "@/components/status-badges";
 import { TicketPreviewDialog } from "@/components/ticket-preview-dialog";
 import { saveOrOpenInvoicePDF } from "@/lib/pdf";
 import type { CreditPayment, CreditPurchase, Invoice } from "@/lib/types";
@@ -619,7 +619,12 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
                           {formatMoney(reste)}
                         </TableCell>
                         <TableCell>
-                          <PaymentBadge status={statusOf(p)} />
+                          <div className="flex flex-wrap items-center gap-1">
+                            <PaymentBadge status={statusOf(p)} />
+                            {p.sourceDeliveryStatus && (
+                              <DeliveryBadge status={p.sourceDeliveryStatus} />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-0.5">

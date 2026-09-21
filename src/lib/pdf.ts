@@ -385,10 +385,9 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
     `N° ${invoice.number}`
   );
 
-  // Watermark
+  // Watermark — uniquement les mentions positives (jamais « IMPAYÉ » sur la facture)
   if (isProforma) watermark(doc, "PROFORMA", GREEN_LIGHT);
   else if (invoice.paymentStatus === "PAYE") watermark(doc, "PAYÉ", GREEN_LIGHT);
-  else if (invoice.paymentStatus === "NON_PAYE") watermark(doc, "IMPAYÉ", [220, 190, 190]);
 
   // Bloc client
   const blockY = 48;
@@ -426,22 +425,28 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
     doc.text(fmtDate(invoice.dueDate), 196, blockY + 5, { align: "right" });
   }
 
-  // Badges statuts
+  // Badges statuts — uniquement « Payé / Partiel » et « Livré » :
+  // les mentions négatives (« Non payé », « Non livré ») ne figurent pas sur la facture.
   if (!isProforma) {
-    statusBadge(
-      doc,
-      PAYMENT_LABELS[invoice.paymentStatus] ?? invoice.paymentStatus,
-      paymentColor(invoice.paymentStatus),
-      164,
-      blockY + (invoice.dueDate ? 12 : 7)
-    );
-    statusBadge(
-      doc,
-      DELIVERY_LABELS[invoice.deliveryStatus] ?? invoice.deliveryStatus,
-      deliveryColor(invoice.deliveryStatus),
-      128,
-      blockY + (invoice.dueDate ? 12 : 7)
-    );
+    const badgeY = blockY + (invoice.dueDate ? 12 : 7);
+    if (invoice.paymentStatus === "PAYE" || invoice.paymentStatus === "PARTIEL") {
+      statusBadge(
+        doc,
+        PAYMENT_LABELS[invoice.paymentStatus] ?? invoice.paymentStatus,
+        paymentColor(invoice.paymentStatus),
+        164,
+        badgeY
+      );
+    }
+    if (invoice.deliveryStatus === "LIVRE") {
+      statusBadge(
+        doc,
+        DELIVERY_LABELS[invoice.deliveryStatus] ?? invoice.deliveryStatus,
+        deliveryColor(invoice.deliveryStatus),
+        128,
+        badgeY
+      );
+    }
   }
 
   // Tableau des articles

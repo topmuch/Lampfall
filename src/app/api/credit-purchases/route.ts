@@ -13,7 +13,24 @@ export async function GET(request: NextRequest) {
       include: { payments: { orderBy: { paidAt: "desc" } } },
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(purchases);
+
+    // Statuts du document source (facture / proforma) : livraison & paiement d'origine
+    const sourceIds = [...new Set(purchases.map((p) => p.sourceId))];
+    const sources = sourceIds.length
+      ? await db.invoice.findMany({
+          where: { id: { in: sourceIds } },
+          select: { id: true, deliveryStatus: true, paymentStatus: true },
+        })
+      : [];
+    const sourceMap = new Map(sources.map((s) => [s.id, s]));
+
+    return NextResponse.json(
+      purchases.map((p) => ({
+        ...p,
+        sourceDeliveryStatus: sourceMap.get(p.sourceId)?.deliveryStatus ?? null,
+        sourcePaymentStatus: sourceMap.get(p.sourceId)?.paymentStatus ?? null,
+      }))
+    );
   } catch (error) {
     console.error("GET /api/credit-purchases", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
