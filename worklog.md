@@ -291,3 +291,24 @@ Stage Summary:
 - Le site est désormais entièrement harmonisé au logo VERT d'origine (clair ET sombre), accents dorés conservés.
 - Anti-cache par nouveau nom d'actif (logo-green.png) ; l'ancien /logo.png (vert) reste dans public/ pour tout usage externe.
 - Note infra : cache Turbopack persistant dans .next peut servir du CSS périmé après édition massive de globals.css → rm -rf .next si besoin.
+
+---
+Task ID: 9
+Agent: Z.ai Code (orchestrateur)
+Task: Refonte de la page de connexion — design plus engageant (thème luxe vert & or conservé)
+
+Work Log:
+- login-view.tsx entièrement réécrit (mêmes props settings/onSuccess, aucune modification app-shell/page) :
+  * Fond immersif animé : 3 aurores flottantes vert/or (blur-3xl) + grille subtile masquée en radial.
+  * Carte centrale en verre (bg-card/85 + backdrop-blur-xl, rounded-3xl, shadow-luxe) en split-screen lg.
+  * Panneau marque gauche : bannière luxe-banner, logo en badge blanc avec halo doré pulsant, gouttes flottantes (clin d'œil au logo), liste de 4 fonctionnalités avec pastilles dorées (factures PDF, stock, immobilier, rôles), bandeau bas « Facturation — Dakar, Sénégal ».
+  * Formulaire : badge « Espace sécurisé », titre « Bon retour parmi nous » (dégradé), icônes dans les champs qui passent au vert au focus, bascule afficher/masquer le mot de passe (Eye/EyeOff + aria-pressed), alerte « Verr. Maj activé » (getModifierState), erreur animée AnimatePresence (role=alert), bouton dégradé btn-shine avec balayage lumineux au survol + flèche qui glisse.
+  * Entrées en cascade framer-motion (stagger 0.08, ease [0.22,1,0.36,1]) ; pied de page « © année — Système de facturation sécurisé ».
+  * ThemeToggle intégré en haut à droite de la page (accessible avant connexion).
+- globals.css : keyframes luxe-float/luxe-float-rev/luxe-glow (+ classes .luxe-float-a/b/c, .luxe-glow, respect prefers-reduced-motion) et .btn-shine (balayage lumineux, désactivé pendant loading).
+- theme-toggle.tsx : dernier vestige violet corrigé — couleur d'icône de la poignée oklch(0.4 0.12 296) → oklch(0.35 0.1 153).
+- Vérifié via agent-browser (3 sessions) : rendu clair (design conforme), mot de passe affiché/masqué, erreur animée sur mauvais identifiants, connexion admin/admin123 → dashboard, mode sombre (verre foncé + or, contraste OK), viewport mobile 390×844 (entête compacte, tout lisible). Lint : 0 erreur, 0 warning. Logs serveur : aucune erreur.
+
+Stage Summary:
+- Page de connexion premium engageante : animations d'entrée en cascade, fond aurora animé, micro-interactions (œil, Verr. Maj, shine, flèche), thème vert & or cohérent clair/sombre/mobile.
+- Aucun changement d'API ni de comportement d'authentification ; props inchangées.

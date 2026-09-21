@@ -233,3 +233,80 @@
 .dark .shadow-luxe {
   box-shadow: 0 2px 6px -1px oklch(0 0 0 / 30%), 0 8px 24px -6px oklch(0 0 0 / 40%);
 }
+
+/* ─── Animations de la page de connexion ─────────────────────────────────── */
+
+@keyframes luxe-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(12px, -18px, 0) scale(1.06);
+  }
+}
+
+@keyframes luxe-float-rev {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-14px, 12px, 0) scale(0.96);
+  }
+}
+
+@keyframes luxe-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: translateX(-50%) scale(1.12);
+  }
+}
+
+.luxe-float-a {
+  animation: luxe-float 9s ease-in-out infinite;
+}
+.luxe-float-b {
+  animation: luxe-float-rev 11s ease-in-out infinite;
+}
+.luxe-float-c {
+  animation: luxe-float 13s ease-in-out infinite reverse;
+}
+.luxe-glow {
+  animation: luxe-glow 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .luxe-float-a,
+  .luxe-float-b,
+  .luxe-float-c,
+  .luxe-glow {
+    animation: none;
+  }
+}
+
+/* Balayage lumineux du bouton principal */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, oklch(1 0 0 / 35%) 50%, transparent 60%);
+  transform: translateX(-120%);
+  transition: transform 0.7s ease;
+  pointer-events: none;
+}
+.btn-shine:hover::after {
+  transform: translateX(120%);
+}
+.btn-shine:disabled::after {
+  display: none;
+}
