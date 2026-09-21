@@ -3,6 +3,8 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
 import { nextNumber, NUMBER_PREFIXES } from "@/lib/constants";
+import { logAudit } from "@/lib/audit";
+import { getAuthUser } from "@/lib/auth";
 
 const UPLOAD_DIR = path.join(process.cwd(), "db", "uploads");
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
@@ -10,12 +12,16 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
 export async function GET(request: NextRequest) {
   try {
     const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+    const supplierId = request.nextUrl.searchParams.get("supplierId")?.trim() ?? "";
+
+    const where: Record<string, unknown> = {};
+    if (supplierId) where.supplierId = supplierId;
+    if (q) {
+      where.OR = [{ number: { contains: q } }, { supplier: { contains: q } }];
+    }
+
     const purchases = await db.purchase.findMany({
-      where: q
-        ? {
-            OR: [{ number: { contains: q } }, { supplier: { contains: q } }],
-          }
-        : undefined,
+      where,
       include: { items: true },
       orderBy: { date: "desc" },
     });
@@ -29,7 +35,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const supplier = (formData.get("supplier")?.toString() ?? "").trim();
+    let supplier = (formData.get("supplier")?.toString() ?? "").trim();
+
+    // Fournisseur lié (optionnel) : valide l'existence et déduit le nom si absent
+    const supplierId = (formData.get("supplierId")?.toString() ?? "").trim() || null;
+    if (supplierId) {
+      const linked = await db.supplier.findUnique({ where: { id: supplierId } });
+      if (!linked) {
+        return NextResponse.json({ error: "Fournisseur invalide" }, { status: 400 });
+      }
+      if (!supplier) supplier = linked.name;
+    }
+
     if (!supplier) {
       return NextResponse.json({ error: "Le fournisseur est obligatoire" }, { status: 400 });
     }
@@ -88,11 +105,15 @@ export async function POST(request: NextRequest) {
     const number =
       formData.get("number")?.toString().trim() || nextNumber(NUMBER_PREFIXES.ACHAT, count, year);
 
+    const user = await getAuthUser(request);
+    const userName = user?.name ?? null;
+
     const purchase = await db.$transaction(async (tx) => {
       const created = await tx.purchase.create({
         data: {
           number,
           supplier,
+          supplierId,
           date: formData.get("date") ? new Date(formData.get("date")!.toString()) : new Date(),
           total,
           notes: formData.get("notes")?.toString().trim() || null,
@@ -115,14 +136,36 @@ export async function POST(request: NextRequest) {
           if (!item.productId) continue;
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) continue;
+          const stockAfter = product.stock + Math.round(item.quantity);
           await tx.product.update({
             where: { id: item.productId },
-            data: { stock: product.stock + Math.round(item.quantity) },
+            data: { stock: stockAfter },
+          });
+          await tx.stockMovement.create({
+            data: {
+              productId: item.productId,
+              type: "ENTREE",
+              quantity: Math.round(item.quantity),
+              stockBefore: product.stock,
+              stockAfter,
+              reason: null,
+              refType: "ACHAT",
+              refId: created.id,
+              userName,
+            },
           });
         }
       }
       return created;
     });
+
+    await logAudit(
+      request,
+      "CREATE",
+      "Purchase",
+      purchase.id,
+      `${purchase.number} — ${purchase.supplier} — ${purchase.total} FCFA`
+    );
 
     return NextResponse.json(purchase, { status: 201 });
   } catch (error) {

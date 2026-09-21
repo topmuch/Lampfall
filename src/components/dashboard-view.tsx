@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
@@ -13,6 +14,7 @@ import {
   Download,
   FileText,
   Package,
+  TrendingDown,
   TrendingUp,
   Users,
   Wallet,
@@ -188,6 +190,21 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
   const maxClient = Math.max(1, ...stats.topClients.map((c) => c.total));
   const maxCategory = Math.max(1, ...stats.topCategories.map((c) => c.total));
   const maxTranche = Math.max(1, ...stats.tranches.map((t) => t.count));
+
+  // Évolution du CA vs année précédente
+  const prevYear = stats.year - 1;
+  const yearDelta =
+    stats.prevYearRevenue > 0
+      ? ((stats.revenueTotal - stats.prevYearRevenue) / stats.prevYearRevenue) * 100
+      : null;
+  const yearDeltaFmt =
+    yearDelta !== null
+      ? Math.abs(yearDelta).toLocaleString("fr-FR", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })
+      : "";
+
   const trancheColors = [
     "bg-gradient-to-r from-violet-600 to-violet-400",
     "bg-gradient-to-r from-purple-600 to-purple-400",
@@ -222,11 +239,41 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <h1 className="text-center text-base font-extrabold sm:text-xl">
-            <span className="text-luxe-gradient">
-              Tableau de bord des ventes — Année {stats.year}
-            </span>
-          </h1>
+          <div className="flex flex-col items-center gap-1">
+            <h1 className="text-center text-base font-extrabold sm:text-xl">
+              <span className="text-luxe-gradient">
+                Tableau de bord des ventes — Année {stats.year}
+              </span>
+            </h1>
+            {yearDelta !== null ? (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "gap-1 border-gold/60 bg-gold-soft/50 text-[11px] font-semibold",
+                  yearDelta >= 0
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-red-600 dark:text-red-400"
+                )}
+                title={`CA ${stats.year} : ${formatMoney(stats.revenueTotal)} — CA ${prevYear} : ${formatMoney(stats.prevYearRevenue)}`}
+              >
+                {yearDelta >= 0 ? (
+                  <TrendingUp className="h-3 w-3" aria-hidden />
+                ) : (
+                  <TrendingDown className="h-3 w-3" aria-hidden />
+                )}
+                vs {prevYear} : {yearDelta >= 0 ? "+" : "−"}
+                {yearDeltaFmt} %
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="gap-1 border-gold/60 bg-gold-soft/50 text-[11px] font-semibold text-muted-foreground"
+                title={`Aucun CA enregistré en ${prevYear}`}
+              >
+                vs {prevYear} : —
+              </Badge>
+            )}
+          </div>
           <div className="flex w-24 justify-end">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/30">
               <TrendingUp className="h-4.5 w-4.5" aria-hidden />

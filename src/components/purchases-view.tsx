@@ -31,6 +31,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Download,
   Eye,
   FileText,
@@ -43,8 +50,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
+import { authFetch } from "@/lib/auth-client";
 import { formatDate, formatMoney, toISODate } from "@/lib/constants";
-import type { Product, Purchase } from "@/lib/types";
+import type { Product, Purchase, Supplier } from "@/lib/types";
 import {
   DraftItem,
   ItemsEditor,
@@ -55,24 +63,30 @@ import { buildPurchasePDF, openPDF } from "@/lib/pdf";
 
 interface FormState {
   supplier: string;
+  supplierId: string; // « » = fournisseur libre
   date: string;
   notes: string;
   updateStock: boolean;
   items: DraftItem[];
 }
 
+/** L'API renvoie aussi fileStored (nom interne du fichier stocké), absent du type Purchase. */
+type PurchaseRow = Purchase & { fileStored?: string | null };
+
 export function PurchasesView() {
   const { toast } = useToast();
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q);
-  const { data: purchases, loading, refetch } = useFetch<Purchase[]>(
+  const { data: purchases, loading, refetch } = useFetch<PurchaseRow[]>(
     `/api/purchases${debouncedQ ? `?q=${encodeURIComponent(debouncedQ)}` : ""}`
   );
   const { data: products } = useFetch<Product[]>("/api/products");
+  const { data: suppliers, refetch: refetchSuppliers } = useFetch<Supplier[]>("/api/suppliers");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<FormState>({
     supplier: "",
+    supplierId: "",
     date: toISODate(new Date()),
     notes: "",
     updateStock: true,
@@ -82,6 +96,11 @@ export function PurchasesView() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Purchase | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Mini-dialog « nouveau fournisseur » (répertoire)
+  const [newSupOpen, setNewSupOpen] = useState(false);
+  const [newSup, setNewSup] = useState({ name: "", phone: "" });
+  const [newSupBusy, setNewSupBusy] = useState(false);
 
   const totals = useMemo(() => {
     const list = purchases ?? [];
@@ -116,6 +135,7 @@ export function PurchasesView() {
     try {
       const formData = new FormData();
       formData.set("supplier", form.supplier);
+      if (form.supplierId) formData.set("supplierId", form.supplierId);
       formData.set("date", form.date ? new Date(`${form.date}T12:00:00`).toISOString() : "");
       formData.set("notes", form.notes);
       formData.set("updateStock", String(form.updateStock));
@@ -134,6 +154,7 @@ export function PurchasesView() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       setForm({
         supplier: "",
+        supplierId: "",
         date: toISODate(new Date()),
         notes: "",
         updateStock: true,
@@ -177,6 +198,50 @@ export function PurchasesView() {
     }
   };
 
+  // Création rapide d'un fournisseur depuis le dialog d'achat
+  const submitNewSupplier = async () => {
+    if (!newSup.name.trim()) {
+      toast({
+        title: "Nom obligatoire",
+        description: "Saisissez le nom du fournisseur.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setNewSupBusy(true);
+    try {
+      const res = await authFetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newSup.name.trim(),
+          phone: newSup.phone.trim() || null,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? "Création impossible");
+      toast({ title: "Fournisseur créé", description: newSup.name.trim() });
+      await refetchSuppliers();
+      if (json?.id) {
+        setForm((f) => ({
+          ...f,
+          supplierId: json.id as string,
+          supplier: (json.name as string) ?? newSup.name.trim(),
+        }));
+      }
+      setNewSupOpen(false);
+      setNewSup({ name: "", phone: "" });
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setNewSupBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -191,6 +256,7 @@ export function PurchasesView() {
           onClick={() => {
             setForm({
               supplier: "",
+              supplierId: "",
               date: toISODate(new Date()),
               notes: "",
               updateStock: true,
@@ -348,13 +414,50 @@ export function PurchasesView() {
           <div className="grid gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="pu-supplier">Fournisseur *</Label>
-                <Input
-                  id="pu-supplier"
-                  value={form.supplier}
-                  onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                  placeholder="Ex : SOTRA Import"
-                />
+                <Label htmlFor="pu-supplier-dir">Fournisseur (répertoire)</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={form.supplierId || "free"}
+                    onValueChange={(v) => {
+                      const id = v === "free" ? "" : v;
+                      const found = (suppliers ?? []).find((s) => s.id === id);
+                      setForm((f) => ({
+                        ...f,
+                        supplierId: id,
+                        supplier: found ? found.name : "",
+                      }));
+                    }}
+                  >
+                    <SelectTrigger
+                      id="pu-supplier-dir"
+                      className="w-full"
+                      aria-label="Choisir un fournisseur du répertoire"
+                    >
+                      <SelectValue placeholder="— Fournisseur libre —" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      <SelectItem value="free">— Fournisseur libre —</SelectItem>
+                      {(suppliers ?? []).map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-11 sm:h-9"
+                    onClick={() => {
+                      setNewSup({ name: "", phone: "" });
+                      setNewSupOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Nouveau</span>
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="pu-date">Date d&apos;achat</Label>
@@ -365,6 +468,21 @@ export function PurchasesView() {
                   onChange={(e) => setForm({ ...form, date: e.target.value })}
                 />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="pu-supplier">Fournisseur (nom libre) *</Label>
+              <Input
+                id="pu-supplier"
+                value={form.supplier}
+                onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                placeholder="Ex : SOTRA Import"
+              />
+              {form.supplierId && (
+                <p className="text-xs text-muted-foreground">
+                  Fournisseur lié au répertoire — le nom est prérempli et modifiable.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -443,6 +561,46 @@ export function PurchasesView() {
             </Button>
             <Button variant="destructive" onClick={doDelete}>
               Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mini-dialog nouveau fournisseur (répertoire) */}
+      <Dialog open={newSupOpen} onOpenChange={(v) => !v && setNewSupOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nouveau fournisseur</DialogTitle>
+            <DialogDescription>
+              Ajoutez le fournisseur au répertoire : il sera présélectionné pour cet achat.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ns-name">Nom *</Label>
+              <Input
+                id="ns-name"
+                value={newSup.name}
+                onChange={(e) => setNewSup((s) => ({ ...s, name: e.target.value }))}
+                placeholder="Ex : SOTRA Import"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ns-phone">Téléphone</Label>
+              <Input
+                id="ns-phone"
+                value={newSup.phone}
+                onChange={(e) => setNewSup((s) => ({ ...s, phone: e.target.value }))}
+                placeholder="77 000 00 00"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewSupOpen(false)} disabled={newSupBusy}>
+              Annuler
+            </Button>
+            <Button onClick={submitNewSupplier} disabled={newSupBusy || !newSup.name.trim()} className="min-w-24">
+              {newSupBusy ? "Création…" : "Créer"}
             </Button>
           </DialogFooter>
         </DialogContent>

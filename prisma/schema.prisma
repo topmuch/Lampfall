@@ -10,14 +10,15 @@ datasource db {
 // ─── Clients ────────────────────────────────────────────────────────────────
 
 model Client {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  email     String?
-  address   String?
-  type      String   @default("PARTICULIER") // PARTICULIER | ENTREPRISE
-  notes     String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  type        String   @default("PARTICULIER") // PARTICULIER | ENTREPRISE
+  creditLimit Float    @default(0) // plafond de crédit (0 = illimité)
+  notes       String?
+  createdAt   DateTime @default(now())
 
   invoices Invoice[]
   orders   Order[]
@@ -46,6 +47,8 @@ model Product {
   unit          String   @default("pièce")
   minStock      Int      @default(0)
   createdAt     DateTime @default(now())
+
+  movements StockMovement[]
 }
 
 // ─── Factures (vente + proforma) ────────────────────────────────────────────
@@ -70,20 +73,22 @@ model Invoice {
   notes          String?
   createdAt      DateTime  @default(now())
 
-  items InvoiceItem[]
+  items    InvoiceItem[]
+  payments Payment[]
 }
 
 model InvoiceItem {
-  id          String  @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  productId   String?
-  productName String
-  category    String?
-  unit        String  @default("pièce")
-  quantity    Float
-  unitPrice   Float
-  total       Float
+  id            String  @id @default(cuid())
+  invoiceId     String
+  invoice       Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId     String?
+  productName   String
+  category      String?
+  unit          String  @default("pièce")
+  quantity      Float
+  unitPrice     Float
+  total         Float
+  purchasePrice Float? // prix d'achat au moment de la vente (calcul de marge)
 }
 
 // ─── Factures d'achat (fournisseurs, avec pièce jointe) ─────────────────────
@@ -92,6 +97,8 @@ model Purchase {
   id         String   @id @default(cuid())
   number     String
   supplier   String
+  supplierId String?
+  supplierRef Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   date       DateTime @default(now())
   total      Float    @default(0)
   fileName   String?
@@ -172,6 +179,63 @@ model Rent {
   createdAt DateTime @default(now())
 
   @@unique([tenantId, month])
+}
+
+// ─── Versements (paiements multiples par facture) ───────────────────────────
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Float
+  method    String   @default("ESPECES") // ESPECES | WAVE | ORANGE_MONEY | FREE_MONEY | VIREMENT | CHEQUE
+  paidAt    DateTime @default(now())
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+// ─── Fournisseurs ───────────────────────────────────────────────────────────
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  purchases Purchase[]
+}
+
+// ─── Mouvements de stock (journal) ──────────────────────────────────────────
+
+model StockMovement {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type        String // ENTREE | SORTIE | AJUSTEMENT
+  quantity    Float
+  stockBefore Float
+  stockAfter  Float
+  reason      String?
+  refType     String? // ACHAT | VENTE | MANUEL | INITIAL
+  refId       String?
+  userName    String?
+  createdAt   DateTime @default(now())
+}
+
+// ─── Journal d'audit ────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userName  String?
+  action    String // CREATE | UPDATE | DELETE
+  entity    String // Invoice | Client | Product | Purchase | Supplier | Payment | Tenant | Rent | User | Settings | Stock
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
 }
 
 // ─── Paramètres société (injectés dans les factures) ────────────────────────

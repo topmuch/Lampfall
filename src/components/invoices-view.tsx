@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Bell,
   Download,
   Eye,
   FileDown,
@@ -39,7 +40,10 @@ import {
   RefreshCw,
   Repeat1,
   Search,
+  Send,
   Trash2,
+  Truck,
+  Wallet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
@@ -50,7 +54,14 @@ import {
   PaymentBadge,
 } from "@/components/status-badges";
 import { InvoiceDialog } from "@/components/invoice-dialog";
-import { buildInvoiceListPDF, saveOrOpenInvoicePDF } from "@/lib/pdf";
+import { InvoiceShareDialog } from "@/components/invoice-share-dialog";
+import { PaymentsDialog } from "@/components/payments-dialog";
+import {
+  buildDeliveryNotePDF,
+  buildInvoiceListPDF,
+  openPDF,
+  saveOrOpenInvoicePDF,
+} from "@/lib/pdf";
 
 interface InvoicesViewProps {
   type: "VENTE" | "PROFORMA";
@@ -93,6 +104,11 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
   const [deleting, setDeleting] = useState<Invoice | null>(null);
   const [convertTarget, setConvertTarget] = useState<Invoice | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Dialogs de partage & paiements (factures de vente uniquement)
+  const [shareInvoice, setShareInvoice] = useState<Invoice | null>(null);
+  const [shareMode, setShareMode] = useState<"relance" | "envoi">("relance");
+  const [paymentsInvoice, setPaymentsInvoice] = useState<Invoice | null>(null);
 
   const totals = useMemo(() => {
     const list = invoices ?? [];
@@ -181,6 +197,19 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
       await saveOrOpenInvoicePDF(inv, action);
     } catch {
       toast({ title: "Erreur PDF", description: "Génération du PDF impossible.", variant: "destructive" });
+    }
+  };
+
+  const handleDeliveryNote = async (inv: Invoice) => {
+    try {
+      const doc = await buildDeliveryNotePDF(inv);
+      openPDF(doc);
+    } catch {
+      toast({
+        title: "Erreur PDF",
+        description: "Génération du bon de livraison impossible.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -383,6 +412,34 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
                           <DropdownMenuItem onClick={() => openEdit(inv)}>
                             <Pencil className="h-4 w-4" /> Modifier
                           </DropdownMenuItem>
+                          {!isProforma && (
+                            <>
+                              <DropdownMenuItem onClick={() => setPaymentsInvoice(inv)}>
+                                <Wallet className="h-4 w-4" /> Paiements
+                              </DropdownMenuItem>
+                              {inv.paymentStatus !== "PAYE" && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setShareMode("relance");
+                                    setShareInvoice(inv);
+                                  }}
+                                >
+                                  <Bell className="h-4 w-4" /> Relancer
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setShareMode("envoi");
+                                  setShareInvoice(inv);
+                                }}
+                              >
+                                <Send className="h-4 w-4" /> Envoyer par…
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDeliveryNote(inv)}>
+                                <Truck className="h-4 w-4" /> Bon de livraison
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           {isProforma && (
                             <DropdownMenuItem onClick={() => setConvertTarget(inv)}>
                               <Repeat1 className="h-4 w-4" /> Convertir en facture
@@ -415,6 +472,22 @@ export function InvoicesView({ type, onNavigateToInvoices }: InvoicesViewProps) 
         invoice={editing}
         clients={clients ?? []}
         products={products ?? []}
+      />
+
+      {/* Dialog partage : relance / envoi (WhatsApp, email, copie, PDF) */}
+      <InvoiceShareDialog
+        invoice={shareInvoice}
+        mode={shareMode}
+        open={shareInvoice !== null}
+        onOpenChange={(v) => !v && setShareInvoice(null)}
+      />
+
+      {/* Dialog paiements (versements multiples) */}
+      <PaymentsDialog
+        invoice={paymentsInvoice}
+        open={paymentsInvoice !== null}
+        onOpenChange={(v) => !v && setPaymentsInvoice(null)}
+        onUpdated={refetch}
       />
 
       {/* Confirmation suppression */}

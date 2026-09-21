@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
+import { formatMoney } from "@/lib/constants";
 import type { Client } from "@/lib/types";
 import { ClientDetailView } from "@/components/client-detail-view";
 
@@ -53,6 +54,7 @@ interface FormState {
   phone: string;
   email: string;
   address: string;
+  creditLimit: string;
   notes: string;
 }
 
@@ -62,6 +64,7 @@ const emptyForm: FormState = {
   phone: "",
   email: "",
   address: "",
+  creditLimit: "0",
   notes: "",
 };
 
@@ -92,6 +95,7 @@ export function ClientsView() {
               phone: editing.phone ?? "",
               email: editing.email ?? "",
               address: editing.address ?? "",
+              creditLimit: String(editing.creditLimit ?? 0),
               notes: editing.notes ?? "",
             }
           : emptyForm
@@ -106,10 +110,14 @@ export function ClientsView() {
     }
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        creditLimit: Math.max(0, Number(form.creditLimit) || 0),
+      };
       const res = await fetch(editing ? `/api/clients/${editing.id}` : "/api/clients", {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erreur d'enregistrement");
@@ -246,7 +254,20 @@ export function ClientsView() {
               <TableBody>
                 {clients.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{c.name}</span>
+                        {(c.creditLimit ?? 0) > 0 && (
+                          <Badge
+                            variant="outline"
+                            className="hidden shrink-0 border-gold/50 bg-gold-soft/40 text-[10px] whitespace-nowrap sm:inline-flex"
+                            title={`Plafond de crédit autorisé : ${formatMoney(c.creditLimit ?? 0)}`}
+                          >
+                            Plafond : {formatMoney(c.creditLimit ?? 0)}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -418,6 +439,19 @@ function ClientFormDialog({
               onChange={(e) => setForm({ ...form, address: e.target.value })}
               placeholder="Quartier, ville"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="c-credit">Plafond de crédit (FCFA)</Label>
+            <Input
+              id="c-credit"
+              type="number"
+              min={0}
+              step={1000}
+              value={form.creditLimit}
+              onChange={(e) => setForm({ ...form, creditLimit: e.target.value })}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">0 = aucun plafond</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="c-notes">Notes</Label>

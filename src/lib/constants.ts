@@ -64,6 +64,47 @@ export const PAYMENT_LABELS: Record<string, string> = {
 
 export const CLIENT_TYPES = ["PARTICULIER", "ENTREPRISE"] as const;
 
+// ─── Versements (méthodes de paiement) ──────────────────────────────────────
+
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  ESPECES: "Espèces",
+  WAVE: "Wave",
+  ORANGE_MONEY: "Orange Money",
+  FREE_MONEY: "Free Money",
+  VIREMENT: "Virement bancaire",
+  CHEQUE: "Chèque",
+};
+
+// ─── Mouvements de stock ────────────────────────────────────────────────────
+
+export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
+  ENTREE: "Entrée",
+  SORTIE: "Sortie",
+  AJUSTEMENT: "Ajustement",
+};
+
+// ─── Journal d'audit ────────────────────────────────────────────────────────
+
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  CREATE: "Création",
+  UPDATE: "Modification",
+  DELETE: "Suppression",
+};
+
+export const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  Invoice: "Facture",
+  Client: "Client",
+  Product: "Produit",
+  Purchase: "Achat",
+  Supplier: "Fournisseur",
+  Payment: "Versement",
+  Tenant: "Locataire",
+  Rent: "Loyer",
+  User: "Utilisateur",
+  Settings: "Paramètres",
+  Stock: "Stock",
+};
+
 // ─── Immobilier (loyers) ────────────────────────────────────────────────────
 
 export const RENT_STATUSES = ["PAYE", "NON_PAYE"] as const;

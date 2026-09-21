@@ -7,6 +7,7 @@ export interface Client {
   email?: string | null;
   address?: string | null;
   type: string;
+  creditLimit?: number;
   notes?: string | null;
   createdAt: string;
 }
@@ -68,6 +69,7 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  purchasePrice?: number | null;
 }
 
 export interface Invoice {
@@ -89,6 +91,17 @@ export interface Invoice {
   totalTTC: number;
   notes?: string | null;
   items: InvoiceItem[];
+  payments?: Payment[];
+  createdAt: string;
+}
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  note?: string | null;
   createdAt: string;
 }
 
@@ -105,6 +118,7 @@ export interface Purchase {
   id: string;
   number: string;
   supplier: string;
+  supplierId?: string | null;
   date: string;
   total: number;
   fileName?: string | null;
@@ -112,6 +126,44 @@ export interface Purchase {
   fileSize?: number | null;
   notes?: string | null;
   items: PurchaseItem[];
+  createdAt: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  purchaseCount?: number;
+  purchaseTotal?: number;
+}
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  productName?: string;
+  type: "ENTREE" | "SORTIE" | "AJUSTEMENT";
+  quantity: number;
+  stockBefore: number;
+  stockAfter: number;
+  reason?: string | null;
+  refType?: string | null;
+  refId?: string | null;
+  userName?: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId?: string | null;
+  userName?: string | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  details?: string | null;
   createdAt: string;
 }
 
@@ -152,6 +204,7 @@ export interface DashboardStats {
   unpaidTotal: number;
   purchaseTotal: number;
   pendingOrders: number;
+  prevYearRevenue: number;
   lowStock: Product[];
   monthlyRevenue: { month: string; monthKey: string; total: number; paid: number }[];
   dailyRevenue: { day: number; total: number; count: number }[];
@@ -211,15 +264,19 @@ export interface SalesReportSummary {
   deliveredCount: number;
   notDeliveredCount: number;
   itemsCount: number;
+  margin: number;
+  marginPct: number;
+  prevTotalTTC: number;
+  prevCount: number;
 }
 
 export interface SalesReport {
   from: string;
   to: string;
   summary: SalesReportSummary;
-  monthly: { monthKey: string; label: string; total: number; paid: number }[];
+  monthly: { monthKey: string; label: string; total: number; paid: number; margin: number }[];
   topClients: { name: string; count: number; total: number }[];
-  byCategory: { category: string; label: string; total: number; quantity: number }[];
-  topProducts: { name: string; quantity: number; total: number }[];
+  byCategory: { category: string; label: string; total: number; quantity: number; margin: number }[];
+  topProducts: { name: string; quantity: number; total: number; margin: number }[];
   invoices: Invoice[];
 }

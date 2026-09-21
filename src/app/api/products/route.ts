@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isValidCategory, sanitizeImage } from "@/lib/product-validation";
+import { logAudit } from "@/lib/audit";
+import { getAuthUser } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,19 +36,45 @@ export async function POST(request: NextRequest) {
     if (!(await isValidCategory(body.category))) {
       return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
     }
-    const product = await db.product.create({
-      data: {
-        name,
-        reference: body.reference?.toString().trim() || null,
-        category: body.category,
-        image: sanitizeImage(body.image),
-        purchasePrice: Number(body.purchasePrice) || 0,
-        salePrice: Number(body.salePrice) || 0,
-        stock: Math.round(Number(body.stock) || 0),
-        unit: body.unit?.toString().trim() || "pièce",
-        minStock: Math.round(Number(body.minStock) || 0),
-      },
+    const user = await getAuthUser(request);
+    const userName = user?.name ?? null;
+    const stock = Math.max(0, Math.round(Number(body.stock) || 0));
+
+    const product = await db.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          name,
+          reference: body.reference?.toString().trim() || null,
+          category: body.category,
+          image: sanitizeImage(body.image),
+          purchasePrice: Number(body.purchasePrice) || 0,
+          salePrice: Number(body.salePrice) || 0,
+          stock,
+          unit: body.unit?.toString().trim() || "pièce",
+          minStock: Math.round(Number(body.minStock) || 0),
+        },
+      });
+
+      // Stock initial > 0 → mouvement d'entrée INITIAL
+      if (stock > 0) {
+        await tx.stockMovement.create({
+          data: {
+            productId: created.id,
+            type: "ENTREE",
+            quantity: stock,
+            stockBefore: 0,
+            stockAfter: stock,
+            reason: "Stock initial",
+            refType: "INITIAL",
+            userName,
+          },
+        });
+      }
+
+      return created;
     });
+
+    await logAudit(request, "CREATE", "Product", product.id, product.name);
     return NextResponse.json(product, { status: 201 });
   } catch (error) {
     console.error("POST /api/products", error);

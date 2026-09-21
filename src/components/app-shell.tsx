@@ -17,12 +17,14 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
+  ArrowLeftRight,
   BarChart3,
   Building2,
   ChevronDown,
   ClipboardList,
   FileSignature,
   FileText,
+  History,
   KeyRound,
   LayoutDashboard,
   Loader2,
@@ -32,6 +34,7 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   ShoppingBag,
+  Truck,
   Users2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,6 +47,9 @@ import { PurchasesView } from "@/components/purchases-view";
 import { OrdersView } from "@/components/orders-view";
 import { ImmoView } from "@/components/immo-view";
 import { ReportsView } from "@/components/reports-view";
+import { SuppliersView } from "@/components/suppliers-view";
+import { StockMovementsView } from "@/components/stock-movements-view";
+import { AuditView } from "@/components/audit-view";
 import { UsersView } from "@/components/users-view";
 import { SettingsView } from "@/components/settings-view";
 import { LoginView } from "@/components/login-view";
@@ -61,9 +67,12 @@ type ViewId =
   | "clients"
   | "rapports"
   | "achats"
+  | "fournisseurs"
   | "produits"
+  | "mouvements"
   | "immo"
   | "utilisateurs"
+  | "audit"
   | "parametres";
 
 const NAV: {
@@ -84,11 +93,14 @@ const NAV: {
   { id: "rapports", label: "Rapports de vente", short: "Rapports", icon: BarChart3, section: "Ventes" },
   // ─── Achats & stock ───
   { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag, section: "Achats & stock" },
+  { id: "fournisseurs", label: "Fournisseurs", short: "Fournisseurs", icon: Truck, section: "Achats & stock" },
   { id: "produits", label: "Produits & stock", short: "Produits", icon: Package, section: "Achats & stock" },
+  { id: "mouvements", label: "Mouvements de stock", short: "Mouvements", icon: ArrowLeftRight, section: "Achats & stock" },
   // ─── Immobilier ───
   { id: "immo", label: "Immobilier — Loyers", short: "Immo", icon: Building2, section: "Immobilier" },
   // ─── Administration (admin uniquement) ───
   { id: "utilisateurs", label: "Utilisateurs & rôles", short: "Utilisateurs", icon: ShieldCheck, section: "Administration", adminOnly: true },
+  { id: "audit", label: "Journal d'audit", short: "Audit", icon: History, section: "Administration", adminOnly: true },
   { id: "parametres", label: "Paramètres société", short: "Paramètres", icon: SettingsIcon, section: "Administration", adminOnly: true },
 ];
 
@@ -435,11 +447,14 @@ export function AppShell() {
               {view === "proforma" && <InvoicesView type="PROFORMA" />}
               {view === "commandes" && <OrdersView />}
               {view === "achats" && <PurchasesView />}
+              {view === "fournisseurs" && <SuppliersView />}
               {view === "clients" && <ClientsView />}
               {view === "rapports" && <ReportsView />}
               {view === "produits" && <ProductsView />}
+              {view === "mouvements" && <StockMovementsView />}
               {view === "immo" && <ImmoView />}
               {view === "utilisateurs" && (isAdmin ? <UsersView currentUser={user} /> : <RestrictedCard />)}
+              {view === "audit" && (isAdmin ? <AuditView /> : <RestrictedCard />)}
               {view === "parametres" && (isAdmin ? <SettingsView /> : <RestrictedCard />)}
             </div>
           </main>

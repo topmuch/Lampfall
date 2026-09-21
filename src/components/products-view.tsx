@@ -37,6 +37,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertTriangle,
+  FileDown,
   FolderPlus,
   ImagePlus,
   MoreHorizontal,
@@ -44,12 +45,15 @@ import {
   Pencil,
   Plus,
   Search,
+  SlidersHorizontal,
   Tags,
   Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
-import { formatMoney } from "@/lib/constants";
+import { formatMoney, toISODate } from "@/lib/constants";
+import { authFetch } from "@/lib/auth-client";
+import { buildRestockOrderPDF, downloadPDF } from "@/lib/pdf";
 import type { Product } from "@/lib/types";
 import { CategoryBadge } from "@/components/status-badges";
 import { useCategories } from "@/components/categories-provider";
@@ -137,6 +141,11 @@ export function ProductsView() {
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
   const [catBusy, setCatBusy] = useState(false);
   const [catToDelete, setCatToDelete] = useState<string | null>(null);
+
+  // Ajustement du stock (mouvement AJUSTEMENT)
+  const [adjusting, setAdjusting] = useState<Product | null>(null);
+  const [adjustForm, setAdjustForm] = useState({ newStock: "", reason: "" });
+  const [adjustBusy, setAdjustBusy] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -316,6 +325,78 @@ export function ProductsView() {
     }
   };
 
+  // Bon de réapprovisionnement PDF : produits sous le seuil d'alerte
+  const handleRestockPDF = async () => {
+    const low = (products ?? []).filter((p) => p.stock <= p.minStock);
+    if (low.length === 0) {
+      toast({
+        title: "Aucun produit sous le stock minimum",
+        description: "Tous les produits sont au-dessus de leur seuil d'alerte.",
+      });
+      return;
+    }
+    try {
+      const doc = await buildRestockOrderPDF(low);
+      downloadPDF(doc, `Bon-reappro-${toISODate(new Date())}.pdf`);
+      toast({
+        title: "Bon de réapprovisionnement généré",
+        description: `${low.length} produit${low.length > 1 ? "s" : ""} concerné${low.length > 1 ? "s" : ""}.`,
+      });
+    } catch (e) {
+      toast({
+        title: "Erreur PDF",
+        description: e instanceof Error ? e.message : "Génération impossible",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openAdjust = (p: Product) => {
+    setAdjusting(p);
+    setAdjustForm({ newStock: String(p.stock), reason: "" });
+  };
+
+  const submitAdjustment = async () => {
+    if (!adjusting) return;
+    const newStock = Number(adjustForm.newStock);
+    if (!Number.isInteger(newStock) || newStock < 0) {
+      toast({
+        title: "Stock invalide",
+        description: "Saisissez un entier positif ou nul.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setAdjustBusy(true);
+    try {
+      const res = await authFetch("/api/stock-movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: adjusting.id,
+          newStock,
+          reason: adjustForm.reason.trim(),
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error ?? "Ajustement impossible");
+      toast({
+        title: "Stock ajusté",
+        description: `${adjusting.name} : ${adjusting.stock} → ${newStock}`,
+      });
+      setAdjusting(null);
+      refetch();
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setAdjustBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -326,6 +407,9 @@ export function ProductsView() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={handleRestockPDF}>
+            <FileDown className="h-4 w-4" /> Réappro (PDF)
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setCatDialogOpen(true)}>
             <Tags className="h-4 w-4" /> Catégories
           </Button>
@@ -486,6 +570,9 @@ export function ProductsView() {
                             }}
                           >
                             <Pencil className="h-4 w-4" /> Modifier
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openAdjust(p)}>
+                            <SlidersHorizontal className="h-4 w-4" /> Ajuster le stock
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeleting(p)}
@@ -757,6 +844,74 @@ export function ProductsView() {
             </Button>
             <Button variant="destructive" onClick={doDelete}>
               Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog ajustement du stock */}
+      <Dialog open={adjusting !== null} onOpenChange={(v) => !v && setAdjusting(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajuster le stock</DialogTitle>
+            <DialogDescription>
+              {adjusting && (
+                <>
+                  Produit : <span className="font-medium text-foreground">{adjusting.name}</span>
+                  {adjusting.reference ? ` (${adjusting.reference})` : ""}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="adj-current">Stock actuel</Label>
+              <Input
+                id="adj-current"
+                value={adjusting ? `${adjusting.stock} ${adjusting.unit}` : ""}
+                disabled
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="adj-new">Nouveau stock</Label>
+              <Input
+                id="adj-new"
+                type="number"
+                min="0"
+                value={adjustForm.newStock}
+                onChange={(e) => setAdjustForm((f) => ({ ...f, newStock: e.target.value }))}
+              />
+              {adjusting &&
+                adjustForm.newStock !== "" &&
+                Number(adjustForm.newStock) !== adjusting.stock && (
+                  <p
+                    className={
+                      Number(adjustForm.newStock) > adjusting.stock
+                        ? "text-xs font-medium text-emerald-600"
+                        : "text-xs font-medium text-red-600"
+                    }
+                  >
+                    Différence : {Number(adjustForm.newStock) > adjusting.stock ? "+" : ""}
+                    {Number(adjustForm.newStock) - adjusting.stock}
+                  </p>
+                )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="adj-reason">Motif</Label>
+              <Input
+                id="adj-reason"
+                value={adjustForm.reason}
+                onChange={(e) => setAdjustForm((f) => ({ ...f, reason: e.target.value }))}
+                placeholder="Inventaire, casse, correction…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdjusting(null)} disabled={adjustBusy}>
+              Annuler
+            </Button>
+            <Button onClick={submitAdjustment} disabled={adjustBusy} className="min-w-28">
+              {adjustBusy ? "Ajustement…" : "Ajuster"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -23,7 +23,7 @@ import { useFetch } from "@/hooks/use-fetch";
 import { formatDate, formatMoney, formatMoneyCompact } from "@/lib/constants";
 import type { SalesReport } from "@/lib/types";
 import { DeliveryBadge, PaymentBadge } from "@/components/status-badges";
-import { buildSalesReportPDF, downloadPDF, openPDF, saveOrOpenInvoicePDF } from "@/lib/pdf";
+import { buildSalesReportPDF, buildVatReportPDF, downloadPDF, openPDF, saveOrOpenInvoicePDF } from "@/lib/pdf";
 import { useToast } from "@/hooks/use-toast";
 import {
   Table,
@@ -119,12 +119,14 @@ function HBar({
   max,
   display,
   tone,
+  title,
 }: {
   label: string;
   value: number;
   max: number;
   display: string;
   tone: "violet" | "amber" | "teal";
+  title?: string;
 }) {
   const w = max > 0 ? Math.max(2, (value / max) * 100) : 0;
   const gradients = {
@@ -133,7 +135,7 @@ function HBar({
     teal: "bg-gradient-to-r from-teal-500 to-emerald-500",
   };
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" title={title}>
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="truncate font-medium" title={label}>
           {label}
@@ -173,11 +175,13 @@ function KpiCard({
   value,
   icon: Icon,
   tone,
+  footer,
 }: {
   title: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
   tone: keyof typeof KPI_TONES;
+  footer?: React.ReactNode;
 }) {
   return (
     <Card className="shadow-luxe card-luxe">
@@ -190,6 +194,7 @@ function KpiCard({
           <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums sm:text-xl" title={value}>
             {value}
           </p>
+          {footer}
         </div>
       </CardContent>
     </Card>
@@ -246,6 +251,17 @@ export function ReportsView() {
     }
   };
 
+  const handleVatPDF = async () => {
+    if (!report) return;
+    try {
+      const doc = await buildVatReportPDF(report, periodLabel);
+      downloadPDF(doc, `Etat-TVA-${from}_${to}.pdf`);
+      toast({ title: "État TVA exporté", description: periodLabel });
+    } catch {
+      toast({ title: "Erreur PDF", description: "Génération de l'état TVA impossible.", variant: "destructive" });
+    }
+  };
+
   const exportCSV = () => {
     if (!report || report.invoices.length === 0) return;
     const rows: (string | number)[][] = [
@@ -280,6 +296,14 @@ export function ReportsView() {
   const maxClient = useMemo(() => Math.max(0, ...(report?.topClients ?? []).map((c) => c.total)), [report]);
   const maxCategory = useMemo(() => Math.max(0, ...(report?.byCategory ?? []).map((c) => c.total)), [report]);
 
+  // Delta du CA TTC vs même période l'année précédente
+  const ttcDelta =
+    summary && summary.prevTotalTTC > 0
+      ? ((summary.totalTTC - summary.prevTotalTTC) / summary.prevTotalTTC) * 100
+      : null;
+  const pctFmt = (v: number) =>
+    Math.abs(v).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
   return (
     <div className="space-y-4">
       {/* En-tête */}
@@ -294,6 +318,15 @@ export function ReportsView() {
           <Button variant="outline" size="sm" onClick={refetch} aria-label="Actualiser">
             <RefreshCw className="h-4 w-4" />
             <span className="hidden sm:inline">Actualiser</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleVatPDF}
+            disabled={!report || (summary?.count ?? 0) === 0}
+          >
+            <FileText className="h-4 w-4" />
+            État TVA (PDF)
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!report || (summary?.count ?? 0) === 0}>
             <FileSpreadsheet className="h-4 w-4" />
@@ -414,17 +447,45 @@ export function ReportsView() {
         <>
           {/* KPI */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard title="CA TTC" value={formatMoneyCompact(summary.totalTTC)} icon={TrendingUp} tone="violet" />
+            <KpiCard
+              title="CA TTC"
+              value={formatMoneyCompact(summary.totalTTC)}
+              icon={TrendingUp}
+              tone="violet"
+              footer={
+                ttcDelta !== null ? (
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[11px] font-semibold tabular-nums",
+                      ttcDelta >= 0
+                        ? "text-green-700 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
+                    )}
+                  >
+                    vs période précédente : {ttcDelta >= 0 ? "+" : "−"}
+                    {pctFmt(ttcDelta)} %
+                  </p>
+                ) : undefined
+              }
+            />
             <KpiCard title="Encaissé" value={formatMoneyCompact(summary.paidTotal)} icon={Wallet} tone="teal" />
             <KpiCard title="Reste à payer" value={formatMoneyCompact(summary.unpaidTotal)} icon={FileText} tone="rose" />
             <KpiCard title="Factures" value={String(summary.count)} icon={Users} tone="amber" />
           </div>
 
           {/* Mini indicateurs */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <MiniStat title="Panier moyen" value={formatMoneyCompact(summary.avgTicket)} />
             <MiniStat title="CA HT" value={formatMoneyCompact(summary.totalHT)} />
             <MiniStat title="TVA collectée" value={formatMoneyCompact(summary.vatTotal)} />
+            <MiniStat title="Marge brute" value={formatMoneyCompact(summary.margin)} />
+            <MiniStat
+              title="Marge %"
+              value={`${summary.marginPct.toLocaleString("fr-FR", {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })} %`}
+            />
             <MiniStat title="Articles vendus" value={String(summary.itemsCount)} />
             <MiniStat title="Payées" value={String(summary.paidCount)} />
             <MiniStat title="Partielles" value={String(summary.partialCount)} />
@@ -488,6 +549,7 @@ export function ReportsView() {
                     max={maxCategory}
                     display={formatMoneyCompact(c.total)}
                     tone="amber"
+                    title={`${formatMoneyCompact(c.total)} · marge ${formatMoney(c.margin)}`}
                   />
                 ))}
               </CardContent>
@@ -510,6 +572,7 @@ export function ReportsView() {
                       <TableHead>Produit</TableHead>
                       <TableHead className="text-center">Quantité</TableHead>
                       <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Marge</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -518,6 +581,9 @@ export function ReportsView() {
                         <TableCell className="font-medium">{p.name}</TableCell>
                         <TableCell className="text-center tabular-nums">{p.quantity}</TableCell>
                         <TableCell className="text-right font-bold tabular-nums">{formatMoney(p.total)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {formatMoney(p.margin)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

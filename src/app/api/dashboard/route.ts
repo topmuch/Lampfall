@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         ? monthParam!
         : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
-    const [ventes, proformaCount, clientCount, productCount, purchases, orders, products, recentRaw] =
+    const [ventes, proformaCount, clientCount, productCount, purchases, orders, products, recentRaw, prevYear] =
       await Promise.all([
         db.invoice.findMany({
           where: { type: "VENTE" },
@@ -58,10 +58,22 @@ export async function GET(request: NextRequest) {
           take: 6,
           include: { items: true },
         }),
+        // CA de l'année précédente (comparaison N-1)
+        db.invoice.aggregate({
+          where: {
+            type: "VENTE",
+            date: {
+              gte: new Date(Date.UTC(year - 1, 0, 1)),
+              lt: new Date(Date.UTC(year, 0, 1)),
+            },
+          },
+          _sum: { totalTTC: true },
+        }),
       ]);
 
     const revenueTotal = ventes.reduce((s, f) => s + f.totalTTC, 0);
     const paidTotal = ventes.reduce((s, f) => s + f.amountPaid, 0);
+    const prevYearRevenue = Math.round(prevYear._sum.totalTTC ?? 0);
 
     // CA des 12 mois de l'année sélectionnée
     const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
@@ -140,6 +152,7 @@ export async function GET(request: NextRequest) {
       productCount,
       revenueTotal,
       paidTotal,
+      prevYearRevenue,
       unpaidTotal: revenueTotal - paidTotal,
       purchaseTotal: purchases._sum.total ?? 0,
       pendingOrders: orders.length,

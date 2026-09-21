@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nextNumber, NUMBER_PREFIXES } from "@/lib/constants";
+import { logAudit } from "@/lib/audit";
+import { getAuthUser } from "@/lib/auth";
 
 interface IncomingItem {
   productId?: string | null;
@@ -113,7 +115,23 @@ export async function POST(request: NextRequest) {
     });
     const number = nextNumber(prefix, count, year);
 
+    const user = await getAuthUser(request);
+    const userName = user?.name ?? null;
+
     const invoice = await db.$transaction(async (tx) => {
+      // Lire les produits AVANT décrément (snapshot prix d'achat + stock avant)
+      const productMap = new Map<string, { purchasePrice: number; stock: number }>();
+      for (const item of items) {
+        if (!item.productId || productMap.has(item.productId)) continue;
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (product) {
+          productMap.set(item.productId, {
+            purchasePrice: product.purchasePrice,
+            stock: product.stock,
+          });
+        }
+      }
+
       const created = await tx.invoice.create({
         data: {
           number,
@@ -140,6 +158,9 @@ export async function POST(request: NextRequest) {
               quantity: i.quantity,
               unitPrice: i.unitPrice,
               total: i.quantity * i.unitPrice,
+              purchasePrice: i.productId
+                ? (productMap.get(i.productId)?.purchasePrice ?? null)
+                : null,
             })),
           },
         },
@@ -149,16 +170,38 @@ export async function POST(request: NextRequest) {
       if (updateStock) {
         for (const item of items) {
           if (!item.productId) continue;
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
+          const product = productMap.get(item.productId);
           if (!product) continue;
+          const stockAfter = Math.max(0, product.stock - Math.round(item.quantity));
           await tx.product.update({
             where: { id: item.productId },
-            data: { stock: Math.max(0, product.stock - Math.round(item.quantity)) },
+            data: { stock: stockAfter },
+          });
+          await tx.stockMovement.create({
+            data: {
+              productId: item.productId,
+              type: "SORTIE",
+              quantity: Math.round(item.quantity),
+              stockBefore: product.stock,
+              stockAfter,
+              reason: null,
+              refType: "VENTE",
+              refId: created.id,
+              userName,
+            },
           });
         }
       }
       return created;
     });
+
+    await logAudit(
+      request,
+      "CREATE",
+      "Invoice",
+      invoice.id,
+      `${invoice.number} — ${invoice.clientName} — ${invoice.totalTTC} FCFA`
+    );
 
     return NextResponse.json(invoice, { status: 201 });
   } catch (error) {

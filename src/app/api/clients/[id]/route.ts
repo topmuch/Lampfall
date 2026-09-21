@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,9 +20,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
         email: body.email?.toString().trim() || null,
         address: body.address?.toString().trim() || null,
         type: body.type === "ENTREPRISE" ? "ENTREPRISE" : "PARTICULIER",
+        creditLimit: Math.max(0, Number(body.creditLimit) || 0),
         notes: body.notes?.toString().trim() || null,
       },
     });
+
+    await logAudit(request, "UPDATE", "Client", id, client.name);
     return NextResponse.json(client);
   } catch (error) {
     console.error("PUT /api/clients/[id]", error);
@@ -29,10 +33,16 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
+    const existing = await db.client.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+    }
+
     await db.client.delete({ where: { id } });
+    await logAudit(request, "DELETE", "Client", id, existing.name);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("DELETE /api/clients/[id]", error);

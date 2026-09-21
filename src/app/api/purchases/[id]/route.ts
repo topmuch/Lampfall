@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { unlink } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
 const UPLOAD_DIR = path.join(process.cwd(), "db", "uploads");
 
-export async function DELETE(_request: NextRequest, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     const existing = await db.purchase.findUnique({ where: { id } });
@@ -22,6 +23,7 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
       }
     }
     await db.purchase.delete({ where: { id } });
+    await logAudit(request, "DELETE", "Purchase", id, existing.number);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("DELETE /api/purchases/[id]", error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -130,6 +131,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
       });
     });
 
+    await logAudit(request, "UPDATE", "Invoice", id, invoice.number);
+
     return NextResponse.json(invoice);
   } catch (error) {
     console.error("PUT /api/invoices/[id]", error);
@@ -137,7 +140,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     const existing = await db.invoice.findUnique({
@@ -162,6 +165,8 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
       }
       return tx.invoice.delete({ where: { id } });
     });
+
+    await logAudit(request, "DELETE", "Invoice", id, existing.number);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

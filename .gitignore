@@ -56,3 +56,4 @@ server.log
 /db/
 /download/
 /upload/
+tool-results/

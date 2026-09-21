@@ -3,7 +3,7 @@
 // Génération de documents PDF côté client avec jsPDF + AutoTable
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { Invoice, Order, Purchase, Client, Tenant, Rent, SalesReport } from "./types";
+import type { Invoice, Order, Purchase, Client, Tenant, Rent, SalesReport, Product } from "./types";
 import {
   DELIVERY_LABELS,
   ORDER_STATUS_LABELS,
@@ -820,6 +820,12 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
         labelCell("Panier moyen"), valueCell(fmtNum(s.avgTicket)),
         labelCell("Articles vendus"), valueCell(fmtNum(s.itemsCount)),
       ],
+      [
+        { ...labelCell("Marge brute"), colSpan: 2 },
+        { ...valueCell(`${fmtNum(s.margin)} FCFA`), colSpan: 2 },
+        { ...labelCell("Marge en %"), colSpan: 2 },
+        { ...valueCell(`${fmtNum(s.marginPct)} %`), colSpan: 2 },
+      ],
     ],
     theme: "grid",
     styles: {
@@ -903,13 +909,14 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
     y = sectionTitle(doc, "Ventes par catégorie", y);
     autoTable(doc, {
       startY: y,
-      head: [["Catégorie", "Quantité", "Total"]],
-      body: report.byCategory.map((c) => [c.label, fmtNum(c.quantity), fmtNum(c.total)]),
+      head: [["Catégorie", "Quantité", "Total", "Marge"]],
+      body: report.byCategory.map((c) => [c.label, fmtNum(c.quantity), fmtNum(c.total), fmtNum(c.margin)]),
       ...REPORT_TABLE_STYLES,
       columnStyles: {
-        0: { cellWidth: 110 },
-        1: { cellWidth: 26, halign: "center" },
-        2: { halign: "right", fontStyle: "bold" },
+        0: { cellWidth: 92 },
+        1: { cellWidth: 24, halign: "center" },
+        2: { halign: "right" },
+        3: { halign: "right", fontStyle: "bold" },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
@@ -921,13 +928,21 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
     y = sectionTitle(doc, "Top produits", y);
     autoTable(doc, {
       startY: y,
-      head: [["Produit", "Quantité", "Total"]],
-      body: report.topProducts.map((p) => [p.name, fmtNum(p.quantity), fmtNum(p.total)]),
+      head: [["Produit", "Quantité", "Total", "Marge"]],
+      body: report.topProducts.map((p) => [p.name, fmtNum(p.quantity), fmtNum(p.total), fmtNum(p.margin)]),
+      foot: [[
+        "TOTAL",
+        fmtNum(report.topProducts.reduce((a, p) => a + p.quantity, 0)),
+        fmtNum(report.topProducts.reduce((a, p) => a + p.total, 0)),
+        fmtNum(report.topProducts.reduce((a, p) => a + p.margin, 0)),
+      ]],
       ...REPORT_TABLE_STYLES,
+      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
       columnStyles: {
-        0: { cellWidth: 110 },
-        1: { cellWidth: 26, halign: "center" },
-        2: { halign: "right", fontStyle: "bold" },
+        0: { cellWidth: 92 },
+        1: { cellWidth: 24, halign: "center" },
+        2: { halign: "right" },
+        3: { halign: "right", fontStyle: "bold" },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
@@ -961,6 +976,255 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
       },
     });
   }
+
+  drawFooter(doc);
+  return doc;
+}
+
+// ─── Bon de livraison (sans les prix) ──────────────────────────────────────
+
+export async function buildDeliveryNotePDF(invoice: Invoice): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await getLogoBase64();
+
+  drawHeader(doc, logo, "BON DE LIVRAISON", `Réf. facture ${invoice.number} — ${fmtDate(invoice.date)}`);
+
+  // Bloc client
+  const blockY = 50;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text("CLIENT", 14, blockY);
+  doc.setFontSize(12);
+  doc.setTextColor(...DARK);
+  doc.text(doc.splitTextToSize(invoice.clientName || "Client comptoir", 100), 14, blockY + 6);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY);
+  let cy = blockY + 6 + doc.splitTextToSize(invoice.clientName || "Client comptoir", 100).length * 5.5;
+  if (invoice.clientPhone) {
+    doc.text(`Tél : ${invoice.clientPhone}`, 14, cy);
+    cy += 4.5;
+  }
+  if (invoice.clientAddress) {
+    doc.text(invoice.clientAddress, 14, cy);
+    cy += 4.5;
+  }
+
+  // Encadré livraison
+  doc.setDrawColor(...GREEN);
+  doc.setFillColor(...GREEN_BG);
+  doc.roundedRect(140, blockY - 4, 56, 20, 2, 2, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...GREEN);
+  doc.text("LIVRAISON", 168, blockY + 2, { align: "center" });
+  doc.setFontSize(8);
+  doc.setTextColor(...DARK);
+  doc.text(
+    invoice.deliveryStatus === "LIVRE" ? "Marchandise livrée" : "En attente de livraison",
+    168,
+    blockY + 9,
+    { align: "center" }
+  );
+
+  // Articles (sans les prix)
+  autoTable(doc, {
+    startY: cy + 6,
+    head: [["Désignation", "Quantité", "Unité"]],
+    body: invoice.items.map((it) => [it.productName, fmtNum(it.quantity), it.unit]),
+    foot: [["TOTAL ARTICLES", fmtNum(invoice.items.reduce((s, it) => s + it.quantity, 0)), ""]],
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 9,
+      textColor: DARK as unknown as number[],
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
+      cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
+    },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
+    columnStyles: {
+      0: { cellWidth: 110 },
+      1: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+      2: { cellWidth: 30, halign: "center" },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  // Zone de signatures
+  const ySig = Math.min(lastTableY(doc, cy + 60) + 30, 235);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK);
+  doc.text("Livré par (ETS LAMP FALL)", 32, ySig, { align: "center" });
+  doc.text("Reçu par (le client)", 148, ySig, { align: "center" });
+  doc.setDrawColor(...GRAY);
+  doc.setLineWidth(0.25);
+  doc.line(14, ySig + 22, 110, ySig + 22);
+  doc.line(130, ySig + 22, 196, ySig + 22);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text("Nom, signature et cachet", 32, ySig + 26.5, { align: "center" });
+  doc.text("Nom, signature et cachet", 148, ySig + 26.5, { align: "center" });
+
+  drawFooter(doc);
+  return doc;
+}
+
+// ─── État TVA (récapitulatif par période) ───────────────────────────────────
+
+export async function buildVatReportPDF(report: SalesReport, periodLabel: string): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await getLogoBase64();
+
+  drawHeader(doc, logo, "ÉTAT DE TVA", periodLabel);
+
+  // Récapitulatif mensuel
+  autoTable(doc, {
+    startY: 50,
+    head: [["Période", "Base HT", "TVA collectée", "Total TTC"]],
+    body: report.monthly.map((m) => {
+      const base = Math.max(0, m.total - Math.round((m.total * 18) / 118));
+      return [m.label, fmtNum(base), fmtNum(m.total - base), fmtNum(m.total)];
+    }),
+    foot: [[
+      "TOTAL",
+      fmtNum(report.summary.totalHT),
+      fmtNum(report.summary.vatTotal),
+      fmtNum(report.summary.totalTTC),
+    ]],
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      textColor: DARK as unknown as number[],
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
+      cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
+    },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { halign: "right" },
+      2: { halign: "right", fontStyle: "bold" },
+      3: { halign: "right" },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  let y = lastTableY(doc, 50 + 40) + 10;
+
+  // Détail par taux de TVA (si plusieurs taux)
+  const rates = [...new Set(report.invoices.map((f) => f.taxRate))].sort((a, b) => a - b);
+  if (rates.length > 1) {
+    y = sectionTitle(doc, "Détail par taux de TVA", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Taux", "Nombre de factures", "Base HT", "TVA"]],
+      body: rates.map((r) => {
+        const list = report.invoices.filter((f) => f.taxRate === r);
+        const ht = list.reduce((s, f) => s + f.totalHT, 0);
+        const vat = list.reduce((s, f) => s + (f.totalTTC - f.totalHT), 0);
+        return [`${fmtNum(r)} %`, String(list.length), fmtNum(ht), fmtNum(vat)];
+      }),
+      ...REPORT_TABLE_STYLES,
+      columnStyles: {
+        0: { cellWidth: 25, halign: "center" },
+        1: { cellWidth: 45, halign: "center" },
+        2: { halign: "right" },
+        3: { halign: "right", fontStyle: "bold" },
+      },
+    });
+    y = lastTableY(doc, y + 20) + 8;
+  }
+
+  // Mention légale
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text(
+    "État récapitulatif de la TVA collectée sur les ventes de la période — document interne d'aide à la déclaration.",
+    14,
+    y
+  );
+
+  drawFooter(doc);
+  return doc;
+}
+
+// ─── Bon de commande fournisseur (réapprovisionnement) ───────────────────
+
+export async function buildRestockOrderPDF(products: Product[]): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await getLogoBase64();
+
+  drawHeader(
+    doc,
+    logo,
+    "BON DE COMMANDE",
+    `Réapprovisionnement stock — ${fmtDate(new Date())}`
+  );
+
+  autoTable(doc, {
+    startY: 50,
+    head: [["Produit", "Référence", "Stock actuel", "Stock min.", "Qté suggérée"]],
+    body: products.map((p) => [
+      p.name,
+      p.reference || "—",
+      fmtNum(p.stock),
+      fmtNum(p.minStock),
+      fmtNum(Math.max(p.minStock * 2 - p.stock, p.minStock)),
+    ]),
+    foot: [["TOTAL", "", "", "", fmtNum(products.reduce((s, p) => s + Math.max(p.minStock * 2 - p.stock, p.minStock), 0))]],
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      textColor: DARK as unknown as number[],
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
+      cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
+    },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
+    columnStyles: {
+      0: { cellWidth: 62 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 24, halign: "center" },
+      3: { cellWidth: 24, halign: "center" },
+      4: { halign: "center", fontStyle: "bold" },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  const y = lastTableY(doc, 50 + 30) + 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text(
+    "Quantités suggérées automatiquement (2 × le stock minimum), à ajuster selon les besoins réels.",
+    14,
+    y
+  );
+
+  // Signatures
+  const ySig = Math.min(y + 20, 240);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK);
+  doc.text("Établi par", 40, ySig, { align: "center" });
+  doc.text("Validé par", 148, ySig, { align: "center" });
+  doc.setDrawColor(...GRAY);
+  doc.setLineWidth(0.25);
+  doc.line(22, ySig + 20, 110, ySig + 20);
+  doc.line(130, ySig + 20, 196, ySig + 20);
 
   drawFooter(doc);
   return doc;

@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   ArrowLeft,
   Building2,
@@ -23,6 +24,7 @@ import {
   Pencil,
   Phone,
   ReceiptText,
+  ShieldAlert,
   StickyNote,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -50,9 +52,50 @@ export function ClientDetailView({ client, onBack, onEdit }: ClientDetailProps) 
     const proformas = list.filter((f) => f.type === "PROFORMA");
     const totalFacture = ventes.reduce((s, f) => s + f.totalTTC, 0);
     const totalPaye = ventes.reduce((s, f) => s + f.amountPaid, 0);
-    const dernierAchat = ventes.length > 0 ? ventes[0].date : null; // tri desc par date
-    return { ventes: ventes.length, proformas: proformas.length, totalFacture, totalPaye, reste: totalFacture - totalPaye, dernierAchat };
+
+    // Encours : reste à payer des ventes non soldées
+    const encours = ventes
+      .filter((f) => f.paymentStatus !== "PAYE")
+      .reduce((s, f) => s + Math.max(0, f.totalTTC - f.amountPaid), 0);
+
+    // Panier moyen
+    const panierMoyen = ventes.length > 0 ? totalFacture / ventes.length : 0;
+
+    // Fréquence moyenne entre achats (jours) + dernier achat
+    const sortedTs = ventes
+      .map((f) => new Date(f.date).getTime())
+      .filter((t) => !Number.isNaN(t))
+      .sort((a, b) => a - b);
+    let frequenceJours: number | null = null;
+    if (sortedTs.length >= 2) {
+      const totalDays = sortedTs
+        .slice(1)
+        .reduce((s, t, i) => s + (t - sortedTs[i]) / 86_400_000, 0);
+      frequenceJours = Math.round(totalDays / (sortedTs.length - 1));
+    }
+    const dernierTs = sortedTs.length > 0 ? sortedTs[sortedTs.length - 1] : null;
+    const joursDepuisDernier =
+      dernierTs !== null
+        ? Math.max(0, Math.floor((Date.now() - dernierTs) / 86_400_000))
+        : null;
+    const dernierAchat = dernierTs !== null ? new Date(dernierTs).toISOString() : null;
+
+    return {
+      ventes: ventes.length,
+      proformas: proformas.length,
+      totalFacture,
+      totalPaye,
+      reste: totalFacture - totalPaye,
+      encours,
+      panierMoyen,
+      frequenceJours,
+      joursDepuisDernier,
+      dernierAchat,
+    };
   }, [history]);
+
+  const creditLimit = client.creditLimit ?? 0;
+  const depassePlafond = creditLimit > 0 && stats.encours > creditLimit;
 
   const exportHistory = async () => {
     try {
@@ -150,7 +193,7 @@ export function ClientDetailView({ client, onBack, onEdit }: ClientDetailProps) 
       </Card>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Achats (factures)</p>
@@ -183,7 +226,81 @@ export function ClientDetailView({ client, onBack, onEdit }: ClientDetailProps) 
             </p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Panier moyen</p>
+            <p className="text-lg font-bold tabular-nums">{formatMoney(stats.panierMoyen)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Fréquence d&apos;achat</p>
+            <p className="text-lg font-bold tabular-nums">
+              {stats.frequenceJours !== null ? `≈ ${stats.frequenceJours} jours` : "—"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Dernier achat</p>
+            <p className="text-lg font-bold tabular-nums">
+              {stats.joursDepuisDernier !== null
+                ? stats.joursDepuisDernier === 0
+                  ? "Aujourd'hui"
+                  : `il y a ${stats.joursDepuisDernier} jour${stats.joursDepuisDernier > 1 ? "s" : ""}`
+                : "—"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Encours (non soldé)</p>
+            <p
+              className={`text-lg font-bold tabular-nums ${
+                stats.encours > 0 ? "text-amber-600" : "text-green-700"
+              }`}
+            >
+              {formatMoney(stats.encours)}
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Plafond de crédit (encours vs plafond) */}
+      {creditLimit > 0 && (
+        <Card className={depassePlafond ? "border-red-500/50" : undefined}>
+          <CardContent className="space-y-2.5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="flex items-center gap-2 font-semibold">
+                <ShieldAlert
+                  className={`h-4 w-4 ${depassePlafond ? "text-red-600" : "text-primary"}`}
+                  aria-hidden
+                />
+                Plafond de crédit
+              </span>
+              {depassePlafond ? (
+                <span className="font-bold text-red-600">Plafond dépassé !</span>
+              ) : (
+                <span className="tabular-nums text-muted-foreground">
+                  Encours : {formatMoney(stats.encours)} / plafond {formatMoney(creditLimit)}
+                </span>
+              )}
+            </div>
+            <Progress
+              value={Math.min(100, (stats.encours / creditLimit) * 100)}
+              aria-label={`Encours ${formatMoney(stats.encours)} sur un plafond de ${formatMoney(creditLimit)}`}
+              className={
+                depassePlafond ? "[&>[data-slot=progress-indicator]]:bg-red-600" : undefined
+              }
+            />
+            {depassePlafond && (
+              <p className="text-xs tabular-nums text-red-600">
+                Encours : {formatMoney(stats.encours)} / plafond {formatMoney(creditLimit)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Historique des achats */}
       <Card>

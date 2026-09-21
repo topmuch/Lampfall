@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,9 +39,12 @@ export async function POST(request: NextRequest) {
         email: body.email?.toString().trim() || null,
         address: body.address?.toString().trim() || null,
         type: body.type === "ENTREPRISE" ? "ENTREPRISE" : "PARTICULIER",
+        creditLimit: Math.max(0, Number(body.creditLimit) || 0),
         notes: body.notes?.toString().trim() || null,
       },
     });
+
+    await logAudit(request, "CREATE", "Client", client.id, client.name);
     return NextResponse.json(client, { status: 201 });
   } catch (error) {
     console.error("POST /api/clients", error);

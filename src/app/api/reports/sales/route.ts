@@ -4,7 +4,8 @@ import { CATEGORY_LABELS, monthLabel } from "@/lib/constants";
 
 /**
  * GET /api/reports/sales?from=AAAA-MM-JJ&to=AAAA-MM-JJ
- * Rapport de ventes sur une période : synthèse, évolution mensuelle,
+ * Rapport de ventes sur une période : synthèse (avec marge brute et
+ * comparaison à la même période de l'année précédente), évolution mensuelle,
  * top clients, ventes par catégorie, top produits et détail des factures.
  */
 export async function GET(request: NextRequest) {
@@ -29,6 +30,38 @@ export async function GET(request: NextRequest) {
       orderBy: { date: "desc" },
     });
 
+    // ─── Marge : prix d'achat au moment de la vente, repli catalogue ─────────
+    const catalogProducts = await db.product.findMany({ select: { id: true, purchasePrice: true } });
+    const purchasePriceMap = new Map<string, number>(
+      catalogProducts.map((p) => [p.id, p.purchasePrice])
+    );
+    const itemMarginOf = (item: {
+      total: number;
+      quantity: number;
+      purchasePrice: number | null;
+      productId: string | null;
+    }): number => {
+      const costPrice =
+        item.purchasePrice ?? (item.productId ? purchasePriceMap.get(item.productId) ?? null : null);
+      return costPrice != null ? item.total - item.quantity * costPrice : 0;
+    };
+
+    // ─── Période précédente (décalée d'un an, N-1) ────────────────────────────
+    const fromPrev = `${Number(from.slice(0, 4)) - 1}${from.slice(4)}`;
+    const toPrev = `${Number(to.slice(0, 4)) - 1}${to.slice(4)}`;
+    const prevInvoices = await db.invoice.findMany({
+      where: {
+        type: "VENTE",
+        date: {
+          gte: new Date(`${fromPrev}T00:00:00.000Z`),
+          lte: new Date(`${toPrev}T23:59:59.999Z`),
+        },
+      },
+      select: { totalTTC: true },
+    });
+    const prevTotalTTC = Math.round(prevInvoices.reduce((s, f) => s + f.totalTTC, 0));
+    const prevCount = prevInvoices.length;
+
     // ─── Synthèse ────────────────────────────────────────────────────────────
     let totalHT = 0;
     let totalTTC = 0;
@@ -39,12 +72,16 @@ export async function GET(request: NextRequest) {
     let unpaidCount = 0;
     let deliveredCount = 0;
     let notDeliveredCount = 0;
+    let margin = 0;
 
     for (const f of invoices) {
       totalHT += f.totalHT;
       totalTTC += f.totalTTC;
       paidTotal += f.amountPaid;
-      for (const item of f.items) itemsCount += item.quantity;
+      for (const item of f.items) {
+        itemsCount += item.quantity;
+        margin += itemMarginOf(item);
+      }
       if (f.paymentStatus === "PAYE") paidCount += 1;
       else if (f.paymentStatus === "PARTIEL") partialCount += 1;
       else unpaidCount += 1;
@@ -66,21 +103,32 @@ export async function GET(request: NextRequest) {
       deliveredCount,
       notDeliveredCount,
       itemsCount,
+      margin: Math.round(margin),
+      marginPct: totalTTC > 0 ? Math.round((margin / totalTTC) * 1000) / 10 : 0,
+      prevTotalTTC,
+      prevCount,
     };
 
     // ─── Évolution mensuelle ─────────────────────────────────────────────────
-    const monthMap = new Map<string, { total: number; paid: number }>();
+    const monthMap = new Map<string, { total: number; paid: number; margin: number }>();
     for (const f of invoices) {
       const d = new Date(f.date);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const entry = monthMap.get(key) ?? { total: 0, paid: 0 };
+      const entry = monthMap.get(key) ?? { total: 0, paid: 0, margin: 0 };
       entry.total += f.totalTTC;
       entry.paid += f.amountPaid;
+      for (const item of f.items) entry.margin += itemMarginOf(item);
       monthMap.set(key, entry);
     }
     const monthly = [...monthMap.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([monthKey, v]) => ({ monthKey, label: monthLabel(monthKey), total: v.total, paid: v.paid }));
+      .map(([monthKey, v]) => ({
+        monthKey,
+        label: monthLabel(monthKey),
+        total: v.total,
+        paid: v.paid,
+        margin: Math.round(v.margin),
+      }));
 
     // ─── Top clients ─────────────────────────────────────────────────────────
     const clientMap = new Map<string, { name: string; count: number; total: number }>();
@@ -94,13 +142,14 @@ export async function GET(request: NextRequest) {
     const topClients = [...clientMap.values()].sort((a, b) => b.total - a.total).slice(0, 10);
 
     // ─── Ventes par catégorie ────────────────────────────────────────────────
-    const catMap = new Map<string, { total: number; quantity: number }>();
+    const catMap = new Map<string, { total: number; quantity: number; margin: number }>();
     for (const f of invoices) {
       for (const item of f.items) {
         const cat = item.category ?? "AUTRE";
-        const entry = catMap.get(cat) ?? { total: 0, quantity: 0 };
+        const entry = catMap.get(cat) ?? { total: 0, quantity: 0, margin: 0 };
         entry.total += item.total;
         entry.quantity += item.quantity;
+        entry.margin += itemMarginOf(item);
         catMap.set(cat, entry);
       }
     }
@@ -110,28 +159,32 @@ export async function GET(request: NextRequest) {
         label: category === "AUTRE" ? "Autres articles" : (CATEGORY_LABELS[category] ?? category),
         total: v.total,
         quantity: v.quantity,
+        margin: Math.round(v.margin),
       }))
       .sort((a, b) => b.total - a.total);
 
     // ─── Top produits ────────────────────────────────────────────────────────
-    const productMap = new Map<string, { quantity: number; total: number }>();
+    const productMap = new Map<string, { quantity: number; total: number; margin: number }>();
     for (const f of invoices) {
       for (const item of f.items) {
         const key = item.productName.trim() || "Article";
-        const entry = productMap.get(key) ?? { quantity: 0, total: 0 };
+        const entry = productMap.get(key) ?? { quantity: 0, total: 0, margin: 0 };
         entry.quantity += item.quantity;
         entry.total += item.total;
+        entry.margin += itemMarginOf(item);
         productMap.set(key, entry);
       }
     }
     const topProducts = [...productMap.entries()]
-      .map(([name, v]) => ({ name, ...v }))
+      .map(([name, v]) => ({ name, ...v, margin: Math.round(v.margin) }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
 
     return NextResponse.json({
       from,
       to,
+      prevFrom: fromPrev,
+      prevTo: toPrev,
       summary,
       monthly,
       topClients,
