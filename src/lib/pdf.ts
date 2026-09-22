@@ -181,7 +181,20 @@ export async function getLogoBase64(): Promise<string | null> {
 
 // ─── Helpers de dessin ──────────────────────────────────────────────────────
 
-function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: string) {
+// Police des documents : les factures et proformas sont en Times (Times New Roman) italique,
+// les autres documents conservent Helvetica. Les titres « gras » restent italiques (gras italique).
+type FontStyle = "normal" | "italic" | "bold" | "bolditalic";
+type PdfFont = { name: string; normal: FontStyle; bold: FontStyle };
+const DEFAULT_FONT: PdfFont = { name: "helvetica", normal: "normal", bold: "bold" };
+const INVOICE_FONT: PdfFont = { name: "times", normal: "italic", bold: "bolditalic" };
+
+function drawHeader(
+  doc: jsPDF,
+  logo: string | null,
+  title: string,
+  subtitle: string,
+  font: PdfFont = DEFAULT_FONT
+) {
   const company = companyInfo;
   // Bandeau vert fin en haut
   doc.setFillColor(...GREEN);
@@ -200,10 +213,10 @@ function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: st
   // Infos société
   const xText = logo ? 48 : 14;
   doc.setTextColor(...DARK);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(font.name, font.bold);
   doc.setFontSize(14);
   doc.text(company.name, xText, 15);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(font.name, font.normal);
   doc.setFontSize(8.5);
   doc.setTextColor(...GREEN);
   if (company.tagline) doc.text(company.tagline, xText, 20);
@@ -231,7 +244,7 @@ function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: st
 
   // Titre à droite
   doc.setTextColor(...GREEN);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(font.name, font.bold);
   doc.setFontSize(20);
   doc.text(title, 196, 16, { align: "right" });
   doc.setFontSize(9);
@@ -247,7 +260,7 @@ function drawHeader(doc: jsPDF, logo: string | null, title: string, subtitle: st
   doc.line(14, 41.2, 196, 41.2);
 }
 
-function drawFooter(doc: jsPDF) {
+function drawFooter(doc: jsPDF, font: PdfFont = DEFAULT_FONT) {
   const company = companyInfo;
   const legal = [company.rc ? `RC : ${company.rc}` : "", company.ninea ? `NINEA : ${company.ninea}` : ""]
     .filter(Boolean)
@@ -259,7 +272,7 @@ function drawFooter(doc: jsPDF) {
     doc.setDrawColor(...GREEN);
     doc.setLineWidth(0.4);
     doc.line(14, y - 4, 196, y - 4);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(font.name, font.normal);
     doc.setFontSize(7);
     doc.setTextColor(...GRAY);
     const line1 = [
@@ -282,14 +295,15 @@ function statusBadge(
   label: string,
   color: readonly [number, number, number] | number[],
   x: number,
-  y: number
+  y: number,
+  font: PdfFont = DEFAULT_FONT
 ) {
   const w = 32;
   const h = 7.5;
   doc.setFillColor(color[0], color[1], color[2]);
   doc.roundedRect(x, y, w, h, 1.5, 1.5, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(font.name, font.bold);
   doc.setFontSize(8.5);
   doc.text(label, x + w / 2, y + h / 2 + 1.2, { align: "center" });
 }
@@ -304,12 +318,12 @@ function deliveryColor(status: string) {
   return status === "LIVRE" ? (GREEN as unknown as number[]) : GRAY as unknown as number[];
 }
 
-function watermark(doc: jsPDF, text: string, color: readonly number[]) {
+function watermark(doc: jsPDF, text: string, color: readonly number[], font: PdfFont = DEFAULT_FONT) {
   try {
     const GStateCtor = (doc as unknown as { GState: new (opts: { opacity: number }) => unknown }).GState;
     const g = new GStateCtor({ opacity: 0.07 });
     (doc as unknown as { setGState: (g: unknown) => void }).setGState(g);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(font.name, font.bold);
     doc.setFontSize(60);
     doc.setTextColor(color[0], color[1], color[2]);
     doc.text(text, 105, 165, { align: "center", angle: 40 });
@@ -332,7 +346,7 @@ type TableItem = {
   total: number;
 };
 
-function drawItemsTable(doc: jsPDF, items: TableItem[], startY: number): number {
+function drawItemsTable(doc: jsPDF, items: TableItem[], startY: number, font: PdfFont = DEFAULT_FONT): number {
   autoTable(doc, {
     startY,
     head: [["Désignation", "Qté", "PU (FCFA)", "Total (FCFA)"]],
@@ -344,7 +358,8 @@ function drawItemsTable(doc: jsPDF, items: TableItem[], startY: number): number 
     ]),
     theme: "grid",
     styles: {
-      font: "helvetica",
+      font: font.name,
+      fontStyle: font.normal,
       fontSize: 8.5,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
@@ -354,16 +369,16 @@ function drawItemsTable(doc: jsPDF, items: TableItem[], startY: number): number 
     headStyles: {
       fillColor: GREEN as unknown as number[],
       textColor: [255, 255, 255],
-      fontStyle: "bold",
+      fontStyle: font.bold,
       fontSize: 8.5,
       halign: "left",
     },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
-      0: { cellWidth: 102, fontStyle: "bold" },
+      0: { cellWidth: 102, fontStyle: font.bold },
       1: { cellWidth: 26, halign: "center" },
       2: { cellWidth: 26, halign: "right" },
-      3: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+      3: { cellWidth: 28, halign: "right", fontStyle: font.bold },
     },
     margin: { left: 14, right: 14 },
   });
@@ -382,16 +397,17 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
     doc,
     logo,
     isProforma ? "FACTURE PROFORMA" : "FACTURE",
-    `N° ${invoice.number}`
+    `N° ${invoice.number}`,
+    INVOICE_FONT
   );
 
   // Watermark — uniquement les mentions positives (jamais « IMPAYÉ » sur la facture)
-  if (isProforma) watermark(doc, "PROFORMA", GREEN_LIGHT);
-  else if (invoice.paymentStatus === "PAYE") watermark(doc, "PAYÉ", GREEN_LIGHT);
+  if (isProforma) watermark(doc, "PROFORMA", GREEN_LIGHT, INVOICE_FONT);
+  else if (invoice.paymentStatus === "PAYE") watermark(doc, "PAYÉ", GREEN_LIGHT, INVOICE_FONT);
 
   // Bloc client
   const blockY = 48;
-  doc.setFont("helvetica", "bold");
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
   doc.text("FACTURER À", 14, blockY);
@@ -400,7 +416,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   const clientName = invoice.clientName || "Client comptoir";
   const nameLines = doc.splitTextToSize(clientName, 85);
   doc.text(nameLines, 14, blockY + 6);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
   let cy = blockY + 6 + nameLines.length * 5;
@@ -416,7 +432,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   // Infos facture
   doc.setFontSize(8.5);
   const infoX = 128;
-  doc.setFont("helvetica", "normal");
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
   doc.setTextColor(...GRAY);
   doc.text("Date :", infoX, blockY);
   doc.text(fmtDate(invoice.date), 196, blockY, { align: "right" });
@@ -435,7 +451,8 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
         PAYMENT_LABELS[invoice.paymentStatus] ?? invoice.paymentStatus,
         paymentColor(invoice.paymentStatus),
         164,
-        badgeY
+        badgeY,
+        INVOICE_FONT
       );
     }
     if (invoice.deliveryStatus === "LIVRE") {
@@ -444,13 +461,14 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
         DELIVERY_LABELS[invoice.deliveryStatus] ?? invoice.deliveryStatus,
         deliveryColor(invoice.deliveryStatus),
         128,
-        badgeY
+        badgeY,
+        INVOICE_FONT
       );
     }
   }
 
   // Tableau des articles
-  const tableEnd = drawItemsTable(doc, invoice.items, blockY + 20);
+  const tableEnd = drawItemsTable(doc, invoice.items, blockY + 20, INVOICE_FONT);
 
   // Totaux
   const totalsX = 122;
@@ -462,7 +480,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
       doc.setFillColor(...(opts.fill as [number, number, number]));
       doc.rect(totalsX, ty - 4.4, 196 - totalsX, rowH, "F");
     }
-    doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
+    doc.setFont(INVOICE_FONT.name, opts?.bold ? INVOICE_FONT.bold : INVOICE_FONT.normal);
     doc.setFontSize(9);
     doc.setTextColor(...(opts?.color ?? (DARK as unknown as number[])));
     doc.text(label, totalsX + 2, ty);
@@ -492,7 +510,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   // Bloc « arrêté à la somme de » / signature
   let by = tableEnd + 8;
   const words = amountInWordsFCFA(invoice.totalTTC);
-  doc.setFont("helvetica", "italic");
+  doc.setFont(INVOICE_FONT.name, "italic");
   doc.setFontSize(8.5);
   doc.setTextColor(...DARK);
   const sentence = isProforma
@@ -503,7 +521,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   by += wrapped.length * 4.5 + 4;
 
   if (isProforma) {
-    doc.setFont("helvetica", "normal");
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
     doc.setTextColor(...GRAY);
     doc.setFontSize(8);
     doc.text("Bon pour accord — Signature & cachet du client :", 14, by + 4);
@@ -511,13 +529,13 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
     doc.setLineWidth(0.25);
     doc.roundedRect(14, by + 6, 60, 22, 1, 1, "S");
   } else if (invoice.notes) {
-    doc.setFont("helvetica", "normal");
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
     doc.setFontSize(8);
     doc.setTextColor(...GRAY);
     doc.text(doc.splitTextToSize(`Notes : ${invoice.notes}`, 100), 14, by);
   }
 
-  drawFooter(doc);
+  drawFooter(doc, INVOICE_FONT);
   return doc;
 }
 

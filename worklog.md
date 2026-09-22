@@ -425,3 +425,23 @@ Stage Summary:
 - L'import Excel/CSV permet d'alimenter le catalogue en masse avec validation avant import.
 - Découverte utile : la table Category en base est vide (l'app utilise le repli statique) — l'import et le quick-create gèrent ce cas.
 - Données de test créées pendant la vérification : client Fatou Ndiaye Boutique, facture FV-2026-0004 (11 210 FCFA), produits Robinet mélangeur / Câble électrique 2.5mm / Ampoule LED 12W / Tube PVC 100mm.
+
+---
+Task ID: 14
+Agent: Z.ai Code (principal)
+Task: (1) Synchroniser la version web locale avec GitHub (le sandbox avait été restauré à un état antérieur — Tasks 7-13 absentes localement) ; (2) police Times New Roman Italique sur les PDF facture et facture proforma.
+
+Work Log:
+- Diagnostic : local en avance 1 / derrière 9 sur origin/main (commit local eec9515 = doublon de contenu de 4093b74, diff 149 fichiers 0±0) ; fetch → origin à f0b995b (Tasks 7-13 incluses). `git reset --hard origin/main` → local == GitHub, arbre propre.
+- `bun install` (récupère cmdk + xlsx ajoutés par f0b995b).
+- pdf.ts refondu avec un système de police paramétrable : type `PdfFont { name, normal, bold }`, `DEFAULT_FONT` (helvetica normal/bold) et `INVOICE_FONT` (times italic/bolditalic) ; helpers `drawHeader`, `drawFooter`, `statusBadge`, `watermark`, `drawItemsTable` acceptent un paramètre `font` optionnel (défaut DEFAULT_FONT → les autres documents inchangés) ; styles autoTable (font, fontStyle head + colonnes 0/3) pilotés par le paramètre.
+- `buildInvoicePDF` (facture VENTE + PROFORMA) : INVOICE_FONT passé à tous les helpers et appliqué aux 7 blocs setFont inline (bloc client, infos, totalRow — bold→bolditalic, montant en lettres italic, signature proforma, notes, footer). Tout le document est en Times italique ; la hiérarchie visuelle est conservée via gras italique.
+- DB locale restaurée désynchronisée : users vide + tables manquantes (CreditPurchase…) → `/api/credit-purchases` et `/api/dashboard` en 500. Fix : recréation du compte admin (upsert scrypt admin/admin123, rôle ADMIN) + `bun run db:push` (schéma aligné, client régénéré) + redémarrage du dev server (setsid, le client Prisma régénéré n'est pris en compte qu'au démarrage).
+- Tests agent-browser : connexion admin ; éditeur compact → recherche produits cmdk (« Cim » → option Ciment 50kg 5 000 FCFA · stock 49 + entrée « Créer un produit… ») ; création rapide produit Ciment 50kg (5 000 / stock 50) auto-insérée ; création rapide client Moussa Diop (77 123 45 67) auto-sélectionnée ; facture FV-2026-0001 créée, PDF téléchargé → analyse PyMuPDF des spans : uniquement Times-BoldItalic (ETS LAMP FALL, FACTURE, N°, FACTURER À, en-têtes tableau, Ciment 50kg, TOTAL TTC, Reste à payer) + Times-Italic (adresse, contacts, dates, montant en lettres, footer) — zéro Helvetica ; proforma PF-2026-0001 idem (FACTURE PROFORMA + filigrane PROFORMA en Times) ; non-régression : export liste factures toujours Helvetica/Helvetica-Bold ; rendu visuel de la facture (image 110 dpi) : mise en page intacte, élégante, aucune mention négative.
+- Lint final : 0 erreur. dev.log : API credit-purchases/dashboard/invoices 200 après resync ; rendu `/` 200 sans erreur.
+
+Stage Summary:
+- Version web locale synchronisée exactement avec GitHub (f0b995b) — tous les livrables des Tasks 7-13 sont de retour dans le sandbox.
+- Facture et proforma PDF en Times New Roman italique de bout en bout (Times-Italic / Times-BoldItalic), via un paramètre de police réutilisable — les autres documents (commandes, achats, listes, BL, quittances, rapports) restent en Helvetica par défaut.
+- Environnement restauré opérationnel : admin/admin123 recréé, schéma Prisma resynchronisé, dev server stable (setsid).
+- Données de test créées : produit Ciment 50kg (5 000 FCFA, stock 49 après vente), client Moussa Diop, facture FV-2026-0001 (5 900 TTC TVA 18 %), proforma PF-2026-0001.
