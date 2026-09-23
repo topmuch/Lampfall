@@ -47,7 +47,6 @@ import {
   Truck,
   Wallet,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
 import { formatMoney } from "@/lib/constants";
@@ -94,6 +93,9 @@ export function InvoicesView({ type, onNavigateToInvoices, autoOpenNew, onAutoOp
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ type });
+    // Les documents classés à crédit sont recensés uniquement dans les onglets
+    // Commerçant et Immo — ils n'apparaissent plus dans cette liste.
+    params.set("excludeCredit", "1");
     if (debouncedQ) params.set("q", debouncedQ);
     if (payment) params.set("payment", payment);
     if (delivery) params.set("delivery", delivery);
@@ -260,8 +262,8 @@ export function InvoicesView({ type, onNavigateToInvoices, autoOpenNew, onAutoOp
           <h2 className="text-xl font-bold">{isProforma ? "Factures proforma" : "Factures de vente"}</h2>
           <p className="text-sm text-muted-foreground">
             {isProforma
-              ? "Devis prévisionnels convertissables en factures définitives."
-              : "Suivi des livraisons et des paiements."}
+              ? "Devis prévisionnels convertissables en factures définitives. Les proformas classés à crédit apparaissent dans les onglets Commerçant et Immo."
+              : "Suivi des livraisons et des paiements. Les factures classées à crédit apparaissent dans les onglets Commerçant et Immo."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -415,18 +417,7 @@ export function InvoicesView({ type, onNavigateToInvoices, autoOpenNew, onAutoOp
                 {invoices.map((inv) => (
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">
-                      <span className="inline-flex flex-wrap items-center gap-1.5">
-                        {inv.number}
-                        {transferMap.get(inv.id) && (
-                          <Badge
-                            className="gap-0.5 border-gold/50 bg-gold-soft/60 px-1.5 py-0 text-[10px] font-bold text-amber-800 hover:bg-gold-soft/60 dark:text-amber-300"
-                            title={`Classée à crédit — onglet ${transferMap.get(inv.id) === "IMMO" ? "Immo" : "Commerçant"}`}
-                          >
-                            <CreditCard className="h-3 w-3" aria-hidden /> Crédit ·{" "}
-                            {transferMap.get(inv.id) === "IMMO" ? "Immo" : "Commerçant"}
-                          </Badge>
-                        )}
-                      </span>
+                      <span className="inline-flex flex-wrap items-center gap-1.5">{inv.number}</span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {new Date(inv.date).toLocaleDateString("fr-FR")}

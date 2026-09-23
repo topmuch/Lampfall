@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         db.invoice.findMany({
           where: { type: "VENTE" },
           orderBy: { date: "desc" },
-          take: 6,
+          take: 12,
           include: { items: true },
         }),
         // CA de l'année précédente (comparaison N-1)
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
           _count: true,
         }),
         // Achats à crédit (Commerçant + Immo)
-        db.creditPurchase.findMany({ select: { total: true, amountPaid: true } }),
+        db.creditPurchase.findMany({ select: { total: true, amountPaid: true, sourceId: true } }),
         // Ventes du jour
         db.invoice.aggregate({
           where: { type: "VENTE", date: { gte: dayStart, lt: dayEnd } },
@@ -182,6 +182,11 @@ export async function GET(request: NextRequest) {
     const creditTotal = creditPurchases.reduce((s, c) => s + c.total, 0);
     const creditPaid = creditPurchases.reduce((s, c) => s + c.amountPaid, 0);
 
+    // Dernières factures « vente normale » : les factures classées à crédit
+    // sont recensées uniquement dans les onglets Commerçant / Immo.
+    const creditSourceIds = new Set(creditPurchases.map((c) => c.sourceId));
+    const recentInvoices = recentRaw.filter((f) => !creditSourceIds.has(f.id)).slice(0, 6);
+
     return NextResponse.json({
       year,
       month,
@@ -200,7 +205,7 @@ export async function GET(request: NextRequest) {
       dailyRevenue,
       tranches,
       topClients,
-      recentInvoices: recentRaw,
+      recentInvoices,
       topCategories,
       today: {
         sales: Math.round(todayVentes._sum.totalTTC ?? 0),

@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   Download,
+  FileText,
   Loader2,
+  Pencil,
   Plus,
   Receipt,
   Store,
@@ -47,8 +49,9 @@ import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants"
 import { Search } from "lucide-react";
 import { PaymentBadge, DeliveryBadge } from "@/components/status-badges";
 import { TicketPreviewDialog } from "@/components/ticket-preview-dialog";
+import { InvoiceEditor } from "@/components/invoice-editor";
 import { saveOrOpenInvoicePDF } from "@/lib/pdf";
-import type { CreditPayment, CreditPurchase, Invoice } from "@/lib/types";
+import type { Client, CreditPayment, CreditPurchase, Invoice, Product } from "@/lib/types";
 
 function todayISO(): string {
   const d = new Date();
@@ -419,6 +422,38 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
   const [busy, setBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
+  // Page plein écran de création / édition de facture à crédit (classement verrouillé)
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingSource, setEditingSource] = useState<Invoice | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
+  const { data: clients } = useFetch<Client[]>("/api/clients");
+  const { data: products } = useFetch<Product[]>("/api/products");
+
+  const openCreate = () => {
+    setEditingSource(null);
+    setEditorOpen(true);
+  };
+
+  /** Ouvre l'édition du document source (facture / proforma) lié à l'achat à crédit. */
+  const openEditSource = async (p: CreditPurchase) => {
+    setLoadingEditId(p.id);
+    try {
+      const res = await authFetch(`/api/invoices/${p.sourceId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Document introuvable");
+      setEditingSource(json as Invoice);
+      setEditorOpen(true);
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Ouverture du document impossible",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingEditId(null);
+    }
+  };
+
   /** Télécharge la facture PDF d'origine une fois l'achat à crédit payé. */
   const downloadInvoicePDF = async (p: CreditPurchase) => {
     setDownloadingId(p.id);
@@ -499,10 +534,14 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
           </h2>
           <p className="text-sm text-muted-foreground">
             {isCommercant
-              ? "Factures et proformas transférées : dettes envers les commerçants et fournisseurs."
-              : "Factures et proformas transférées : dettes liées à l'immobilier."}
+              ? "Factures à crédit à payer plus tard : dettes envers les commerçants et fournisseurs."
+              : "Factures à crédit à payer plus tard : dettes liées à l'immobilier."}
           </p>
         </div>
+        <Button size="sm" onClick={openCreate} className="shrink-0">
+          <FileText className="h-4 w-4" aria-hidden />
+          Nouvelle facture
+        </Button>
       </div>
 
       {/* Résumé */}
@@ -563,9 +602,10 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
               <Icon className="h-10 w-10 text-muted-foreground/40" aria-hidden />
               <p className="font-semibold">Aucun achat à crédit</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Depuis l&apos;onglet <strong>Factures</strong> ou <strong>Proforma</strong>, ouvrez le menu
-                d&apos;une ligne puis choisissez <strong>« Transférer en achat à crédit »</strong> pour
-                l&apos;afficher ici.
+                Créez une facture à crédit directement ici avec le bouton{' '}
+                <strong>« Nouvelle facture »</strong>, ou transférez un document depuis les onglets{' '}
+                <strong>Factures</strong> / <strong>Proforma</strong> via son menu{' '}
+                <strong>« Transférer en achat à crédit »</strong>.
               </p>
             </div>
           ) : (
@@ -632,6 +672,21 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              onClick={() => openEditSource(p)}
+                              disabled={loadingEditId === p.id}
+                              aria-label={`Modifier le document ${p.number}`}
+                              title="Modifier le document source"
+                            >
+                              {loadingEditId === p.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              ) : (
+                                <Pencil className="h-4 w-4" aria-hidden />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
                               onClick={() => setPaymentsFor(p)}
                               aria-label={`Versements pour ${p.number}`}
                               title="Versements"
@@ -676,6 +731,19 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
           )}
         </CardContent>
       </Card>
+
+      {/* Page plein écran création / édition de facture à crédit (classement verrouillé) */}
+      <InvoiceEditor
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onSaved={() => refetch()}
+        type={editingSource?.type === "PROFORMA" ? "PROFORMA" : "VENTE"}
+        invoice={editingSource}
+        clients={clients ?? []}
+        products={products ?? []}
+        presetDestination={destination}
+        alreadyTransferred={editingSource ? destination : null}
+      />
 
       {/* Dialog versements */}
       <CreditPaymentsDialog

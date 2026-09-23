@@ -183,10 +183,11 @@ export async function getLogoBase64(): Promise<string | null> {
 
 // Police des documents : les factures et proformas sont en Times (Times New Roman) italique,
 // les autres documents conservent Helvetica. Les titres « gras » restent italiques (gras italique).
+// `scale` grossit les textes du document (factures imprimées plus grandes — demande client).
 type FontStyle = "normal" | "italic" | "bold" | "bolditalic";
-type PdfFont = { name: string; normal: FontStyle; bold: FontStyle };
+type PdfFont = { name: string; normal: FontStyle; bold: FontStyle; scale?: number };
 const DEFAULT_FONT: PdfFont = { name: "helvetica", normal: "normal", bold: "bold" };
-const INVOICE_FONT: PdfFont = { name: "times", normal: "italic", bold: "bolditalic" };
+const INVOICE_FONT: PdfFont = { name: "times", normal: "italic", bold: "bolditalic", scale: 1.25 };
 
 function drawHeader(
   doc: jsPDF,
@@ -196,6 +197,7 @@ function drawHeader(
   font: PdfFont = DEFAULT_FONT
 ) {
   const company = companyInfo;
+  const k = font.scale ?? 1;
   // Bandeau vert fin en haut
   doc.setFillColor(...GREEN);
   doc.rect(0, 0, 210, 3, "F");
@@ -214,10 +216,10 @@ function drawHeader(
   const xText = logo ? 48 : 14;
   doc.setTextColor(...DARK);
   doc.setFont(font.name, font.bold);
-  doc.setFontSize(14);
+  doc.setFontSize(14 * k);
   doc.text(company.name, xText, 15);
   doc.setFont(font.name, font.normal);
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * k);
   doc.setTextColor(...GREEN);
   if (company.tagline) doc.text(company.tagline, xText, 20);
   doc.setTextColor(...GRAY);
@@ -238,16 +240,16 @@ function drawHeader(
     const legal = [company.rc ? `RC : ${company.rc}` : "", company.ninea ? `NINEA : ${company.ninea}` : ""]
       .filter(Boolean)
       .join("  •  ");
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.5 * k);
     doc.text(legal, xText, hy);
   }
 
-  // Titre à droite
+  // Titre à droite (taille plafonnée à ×1,2 pour ne pas empiéter sur le bloc société)
   doc.setTextColor(...GREEN);
   doc.setFont(font.name, font.bold);
-  doc.setFontSize(20);
+  doc.setFontSize(20 * Math.min(k, 1.2));
   doc.text(title, 196, 16, { align: "right" });
-  doc.setFontSize(9);
+  doc.setFontSize(9 * k);
   doc.setTextColor(...GRAY);
   doc.text(subtitle, 196, 22, { align: "right" });
 
@@ -304,7 +306,7 @@ function statusBadge(
   doc.roundedRect(x, y, w, h, 1.5, 1.5, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont(font.name, font.bold);
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * (font.scale ?? 1));
   doc.text(label, x + w / 2, y + h / 2 + 1.2, { align: "center" });
 }
 
@@ -347,6 +349,7 @@ type TableItem = {
 };
 
 function drawItemsTable(doc: jsPDF, items: TableItem[], startY: number, font: PdfFont = DEFAULT_FONT): number {
+  const k = font.scale ?? 1;
   autoTable(doc, {
     startY,
     head: [["Désignation", "Qté", "PU (FCFA)", "Total (FCFA)"]],
@@ -360,25 +363,25 @@ function drawItemsTable(doc: jsPDF, items: TableItem[], startY: number, font: Pd
     styles: {
       font: font.name,
       fontStyle: font.normal,
-      fontSize: 8.5,
+      fontSize: 8.5 * k,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
-      cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 },
+      cellPadding: { top: 2 * k, right: 2.5, bottom: 2 * k, left: 2.5 },
     },
     headStyles: {
       fillColor: GREEN as unknown as number[],
       textColor: [255, 255, 255],
       fontStyle: font.bold,
-      fontSize: 8.5,
+      fontSize: 8.5 * k,
       halign: "left",
     },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
-      0: { cellWidth: 102, fontStyle: font.bold },
+      0: { cellWidth: 96, fontStyle: font.bold },
       1: { cellWidth: 26, halign: "center" },
       2: { cellWidth: 26, halign: "right" },
-      3: { cellWidth: 28, halign: "right", fontStyle: font.bold },
+      3: { cellWidth: 34, halign: "right", fontStyle: font.bold },
     },
     margin: { left: 14, right: 14 },
   });
@@ -392,6 +395,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const logo = await getLogoBase64();
   const isProforma = invoice.type === "PROFORMA";
+  const k = INVOICE_FONT.scale ?? 1;
 
   drawHeader(
     doc,
@@ -408,29 +412,30 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   // Bloc client
   const blockY = 48;
   doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
-  doc.setFontSize(8);
+  doc.setFontSize(8 * k);
   doc.setTextColor(...GRAY);
   doc.text("FACTURER À", 14, blockY);
-  doc.setFontSize(11);
+  doc.setFontSize(11 * k);
   doc.setTextColor(...DARK);
   const clientName = invoice.clientName || "Client comptoir";
   const nameLines = doc.splitTextToSize(clientName, 85);
   doc.text(nameLines, 14, blockY + 6);
   doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * k);
   doc.setTextColor(...GRAY);
-  let cy = blockY + 6 + nameLines.length * 5;
+  let cy = blockY + 6 + nameLines.length * 6;
   if (invoice.clientPhone) {
     doc.text(`Tél : ${invoice.clientPhone}`, 14, cy);
-    cy += 4.5;
+    cy += 5;
   }
   if (invoice.clientAddress) {
-    doc.text(doc.splitTextToSize(invoice.clientAddress, 85), 14, cy);
-    cy += 4.5;
+    const addrLines = doc.splitTextToSize(invoice.clientAddress, 85);
+    doc.text(addrLines, 14, cy);
+    cy += addrLines.length * 5;
   }
 
   // Infos facture
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * k);
   const infoX = 128;
   doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
   doc.setTextColor(...GRAY);
@@ -467,21 +472,22 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
     }
   }
 
-  // Tableau des articles
-  const tableEnd = drawItemsTable(doc, invoice.items, blockY + 20, INVOICE_FONT);
+  // Tableau des articles — démarre sous le bloc client le plus bas (nom long, adresse…)
+  const tableStart = Math.max(blockY + 22, cy + 5);
+  const tableEnd = drawItemsTable(doc, invoice.items, tableStart, INVOICE_FONT);
 
   // Totaux
   const totalsX = 122;
   let ty = tableEnd + 7;
-  const rowH = 6;
+  const rowH = 7;
 
   const totalRow = (label: string, value: string, opts?: { bold?: boolean; color?: number[]; fill?: number[] }) => {
     if (opts?.fill) {
       doc.setFillColor(...(opts.fill as [number, number, number]));
-      doc.rect(totalsX, ty - 4.4, 196 - totalsX, rowH, "F");
+      doc.rect(totalsX, ty - 5.2, 196 - totalsX, rowH, "F");
     }
     doc.setFont(INVOICE_FONT.name, opts?.bold ? INVOICE_FONT.bold : INVOICE_FONT.normal);
-    doc.setFontSize(9);
+    doc.setFontSize(9 * k);
     doc.setTextColor(...(opts?.color ?? (DARK as unknown as number[])));
     doc.text(label, totalsX + 2, ty);
     doc.text(value, 194, ty, { align: "right" });
@@ -493,7 +499,7 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   totalRow(`TVA (${invoice.taxRate}%)`, fmtMoney(invoice.totalTTC - invoice.totalHT));
   doc.setDrawColor(...GREEN);
   doc.setLineWidth(0.4);
-  doc.line(totalsX, ty - 4.6, 196, ty - 4.6);
+  doc.line(totalsX, ty - 5.3, 196, ty - 5.3);
   totalRow("TOTAL TTC", fmtMoney(invoice.totalTTC), {
     bold: true,
     color: GREEN as unknown as number[],
@@ -512,26 +518,26 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
   let by = tableEnd + 8;
   const words = amountInWordsFCFA(invoice.totalTTC);
   doc.setFont(INVOICE_FONT.name, "italic");
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * k);
   doc.setTextColor(...DARK);
   const sentence = isProforma
     ? `Montant estimé de la commande : ${words}`
     : `Arrêtée la présente facture à la somme de : ${words}`;
   const wrapped = doc.splitTextToSize(sentence, 100);
   doc.text(wrapped, 14, by);
-  by += wrapped.length * 4.5 + 4;
+  by += wrapped.length * 5.5 + 4;
 
   if (isProforma) {
     doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
     doc.setTextColor(...GRAY);
-    doc.setFontSize(8);
+    doc.setFontSize(8 * k);
     doc.text("Bon pour accord — Signature & cachet du client :", 14, by + 4);
     doc.setDrawColor(...GRAY);
     doc.setLineWidth(0.25);
     doc.roundedRect(14, by + 6, 60, 22, 1, 1, "S");
   } else if (invoice.notes) {
     doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
-    doc.setFontSize(8);
+    doc.setFontSize(8 * k);
     doc.setTextColor(...GRAY);
     doc.text(doc.splitTextToSize(`Notes : ${invoice.notes}`, 100), 14, by);
   }

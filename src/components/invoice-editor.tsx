@@ -57,6 +57,8 @@ interface InvoiceEditorProps {
   products: Product[];
   /** La facture en cours d'édition est déjà classée à crédit (destination). */
   alreadyTransferred?: "COMMERCANT" | "IMMO" | null;
+  /** Destination imposée : création depuis les onglets Commerçant / Immo (classement verrouillé). */
+  presetDestination?: "COMMERCANT" | "IMMO" | null;
 }
 
 interface FormState {
@@ -461,6 +463,7 @@ export function InvoiceEditor({
   clients,
   products,
   alreadyTransferred = null,
+  presetDestination = null,
 }: InvoiceEditorProps) {
   const { toast } = useToast();
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -488,12 +491,12 @@ export function InvoiceEditor({
   useEffect(() => {
     if (open) {
       setForm(invoice ? fromInvoice(invoice) : defaultForm());
-      setDestination("NONE");
+      setDestination(presetDestination ?? "NONE");
       setCreditTier("");
       setCreditDueDate("");
       setCreditNote("");
     }
-  }, [open, invoice]);
+  }, [open, invoice, presetDestination]);
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
@@ -656,9 +659,11 @@ export function InvoiceEditor({
               <h1 className="truncate text-base font-bold sm:text-lg">
                 {isEdit
                   ? `Modifier ${isProforma ? "le proforma" : "la facture"} ${invoice!.number}`
-                  : isProforma
-                    ? "Nouvelle facture proforma"
-                    : "Nouvelle facture de vente"}
+                  : presetDestination
+                    ? `Nouvelle facture à crédit — ${presetDestination === "COMMERCANT" ? "Commerçant" : "Immo"}`
+                    : isProforma
+                      ? "Nouvelle facture proforma"
+                      : "Nouvelle facture de vente"}
               </h1>
               <p className="hidden text-xs text-muted-foreground sm:block">
                 {isProforma
@@ -900,45 +905,68 @@ export function InvoiceEditor({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div
-                  className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"
-                  role="radiogroup"
-                  aria-label="Classement du crédit"
-                >
-                  {destinationOptions.map((opt) => {
-                    const Icon = opt.icon;
-                    const active = destination === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setDestination(opt.value)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-xl border p-2.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "border-primary bg-primary/10 ring-1 ring-primary"
-                            : "bg-card hover:bg-accent"
-                        )}
-                      >
-                        <Icon
+                {presetDestination ? (
+                  /* Destination imposée : création depuis l'onglet Commerçant / Immo */
+                  <div
+                    className="flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2.5"
+                    role="status"
+                  >
+                    {presetDestination === "COMMERCANT" ? (
+                      <Store className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                    ) : (
+                      <Building2 className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold">
+                        Crédit {presetDestination === "COMMERCANT" ? "Commerçant" : "Immo"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Facture à crédit à payer plus tard : elle sera recensée uniquement dans
+                        l&apos;onglet {presetDestination === "COMMERCANT" ? "Commerçant" : "Immo"}.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"
+                    role="radiogroup"
+                    aria-label="Classement du crédit"
+                  >
+                    {destinationOptions.map((opt) => {
+                      const Icon = opt.icon;
+                      const active = destination === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => setDestination(opt.value)}
                           className={cn(
-                            "h-4 w-4 shrink-0",
-                            active ? "text-primary" : "text-muted-foreground"
+                            "flex items-center gap-2 rounded-xl border p-2.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active
+                              ? "border-primary bg-primary/10 ring-1 ring-primary"
+                              : "bg-card hover:bg-accent"
                           )}
-                          aria-hidden
-                        />
-                        <span className="min-w-0">
-                          <span className="block text-xs font-bold">{opt.label}</span>
-                          <span className="block truncate text-[10px] leading-tight text-muted-foreground">
-                            {opt.hint}
+                        >
+                          <Icon
+                            className={cn(
+                              "h-4 w-4 shrink-0",
+                              active ? "text-primary" : "text-muted-foreground"
+                            )}
+                            aria-hidden
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-bold">{opt.label}</span>
+                            <span className="block truncate text-[10px] leading-tight text-muted-foreground">
+                              {opt.hint}
+                            </span>
                           </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {destination !== "NONE" && (
                   <div className="grid gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">

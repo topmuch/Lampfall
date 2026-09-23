@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
     const minAmount = params.get("minAmount")?.trim() ?? "";
     const maxAmount = params.get("maxAmount")?.trim() ?? "";
     const clientId = params.get("clientId")?.trim() ?? "";
+    // excludeCredit=1 : masque les factures/proformas classés en achat à crédit
+    // (elles sont recensées uniquement dans les onglets Commerçant et Immo).
+    const excludeCredit = params.get("excludeCredit") === "1";
 
     const where: Record<string, unknown> = {};
     if (type === "VENTE" || type === "PROFORMA") where.type = type;
@@ -68,6 +71,12 @@ export async function GET(request: NextRequest) {
     if (minAmount && !Number.isNaN(Number(minAmount))) amountFilter.gte = Number(minAmount);
     if (maxAmount && !Number.isNaN(Number(maxAmount))) amountFilter.lte = Number(maxAmount);
     if (Object.keys(amountFilter).length > 0) where.totalTTC = amountFilter;
+
+    if (excludeCredit) {
+      const credits = await db.creditPurchase.findMany({ select: { sourceId: true } });
+      const creditIds = credits.map((c) => c.sourceId);
+      if (creditIds.length > 0) where.id = { notIn: creditIds };
+    }
 
     const invoices = await db.invoice.findMany({
       where,
