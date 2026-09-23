@@ -85,7 +85,9 @@ export async function POST(request: NextRequest) {
         number: invoice.number,
         tier: tier || invoice.clientName || "—",
         total: invoice.totalTTC,
-        amountPaid: 0,
+        // Reprend les versements déjà enregistrés sur la facture afin que les
+        // onglets Factures et Commerçant affichent les mêmes montants.
+        amountPaid: Math.min(invoice.amountPaid, invoice.totalTTC),
         dueDate,
         note: note || null,
       },

@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PAYMENT_METHOD_LABELS } from "@/lib/constants";
+import { syncPaidAmounts } from "@/lib/credit-sync";
 
 type Params = { params: Promise<{ id: string }> };
-
-/** PAYE si amountPaid >= totalTTC, PARTIEL si > 0, sinon NON_PAYE. */
-function computePaymentStatus(totalTTC: number, amountPaid: number): string {
-  if (amountPaid >= totalTTC) return "PAYE";
-  if (amountPaid > 0) return "PARTIEL";
-  return "NON_PAYE";
-}
 
 // ─── GET : liste des versements de la facture ───────────────────────────────
 
@@ -33,6 +27,11 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
 // ─── POST : enregistrer un versement ────────────────────────────────────────
 
+/**
+ * Enregistre un versement sur la facture. Si la facture est transférée en
+ * achat à crédit (Commerçant / Immo), l'achat lié est synchronisé afin que la
+ * mise à jour soit visible à la fois dans Factures et dans Commerçant.
+ */
 export async function POST(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
@@ -63,14 +62,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
     const note = body.note?.toString().trim() || null;
 
-    // Somme déjà versée (source de vérité : les versements)
-    const agg = await db.payment.aggregate({
-      where: { invoiceId: id },
-      _sum: { amount: true },
-    });
-    const existingSum = agg._sum.amount ?? 0;
-    const reste = Math.max(0, invoice.totalTTC - existingSum);
-    if (amount > reste + 0.01) {
+    // Plafond : tous les versements confondus (facture + achat à crédit lié)
+    const reste = Math.max(0, invoice.totalTTC - invoice.amountPaid);
+    if (amount > reste + 0.009) {
       return NextResponse.json(
         {
           error: `Le montant dépasse le reste à payer (${new Intl.NumberFormat("fr-FR", {
@@ -81,29 +75,17 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
 
-    const result = await db.$transaction(async (tx) => {
-      const payment = await tx.payment.create({
-        data: {
-          invoiceId: id,
-          amount,
-          method,
-          paidAt,
-          note,
-        },
-      });
-
-      const sum = existingSum + amount;
-      const amountPaid = Math.min(sum, invoice.totalTTC);
-      const paymentStatus = computePaymentStatus(invoice.totalTTC, amountPaid);
-      const updatedInvoice = await tx.invoice.update({
-        where: { id },
-        data: { amountPaid, paymentStatus },
-      });
-
-      return { payment, invoice: updatedInvoice };
+    const payment = await db.payment.create({
+      data: { invoiceId: id, amount, method, paidAt, note },
     });
 
-    return NextResponse.json(result, { status: 201 });
+    // Recalcule le montant payé (versements facture + crédit + manuel) et
+    // synchronise l'achat à crédit lié.
+    await syncPaidAmounts(id, amount);
+
+    const freshInvoice = await db.invoice.findUnique({ where: { id } });
+
+    return NextResponse.json({ payment, invoice: freshInvoice }, { status: 201 });
   } catch (error) {
     console.error("POST /api/invoices/[id]/payments", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

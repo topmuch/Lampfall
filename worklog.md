@@ -445,3 +445,32 @@ Stage Summary:
 - Facture et proforma PDF en Times New Roman italique de bout en bout (Times-Italic / Times-BoldItalic), via un paramètre de police réutilisable — les autres documents (commandes, achats, listes, BL, quittances, rapports) restent en Helvetica par défaut.
 - Environnement restauré opérationnel : admin/admin123 recréé, schéma Prisma resynchronisé, dev server stable (setsid).
 - Données de test créées : produit Ciment 50kg (5 000 FCFA, stock 49 après vente), client Moussa Diop, facture FV-2026-0001 (5 900 TTC TVA 18 %), proforma PF-2026-0001.
+
+---
+Task ID: 1
+Agent: Z.ai Code (assistant principal)
+Task: Cloner https://github.com/topmuch/Lampfall.git, installer les dépendances, lancer le dev, puis (1) mettre le montant hors taxe en GRAS sur le PDF de facture et (2) synchroniser les mises à jour des factures entre les onglets Factures et Commerçant.
+
+Work Log:
+- Cloné https://github.com/topmuch/Lampfall.git dans /home/z/my-project (remplace le scaffold).
+- `bun install` (dépendances installées), `bunx prisma db push` (schéma SQLite appliqué à db/custom.db).
+- Serveur dev démarré (via .zscripts/dev.sh / init fullstack) sur le port 3000.
+- Fix 1 — src/lib/pdf.ts (buildInvoicePDF) : la ligne "Total HT" des totaux est maintenant rendue avec `{ bold: true }` (label + montant en gras).
+- Fix 2 — nouveau module src/lib/credit-sync.ts :
+  - `syncPaidAmounts(invoiceId, delta)` : recalcule le montant payé d'une facture = versements facture + versements achat à crédit lié + composant manuel, met à jour facture ET achat à crédit (total, amountPaid, statut).
+  - `syncCreditFromInvoice(invoiceId)` : après édition (PUT) de la facture, répercute totalTTC/amountPaid sur l'achat à crédit lié.
+- Routes mises à jour :
+  - POST /api/credit-purchases/[id]/payments : plafond "reste à payer" + synchronisation facture ↔ crédit via syncPaidAmounts.
+  - DELETE /api/credit-purchases/[id]/payments/[paymentId] : synchronisation des deux côtés après suppression.
+  - POST /api/invoices/[id]/payments : plafond basé sur amountPaid (toutes sources) + synchronisation de l'achat à crédit lié.
+  - DELETE /api/payments/[id] : recalcul unifié via syncPaidAmounts.
+  - PUT /api/invoices/[id] : appelle syncCreditFromInvoice après la transaction.
+  - DELETE /api/invoices/[id] : supprime aussi l'achat à crédit lié (suppression du transfert orphelin).
+  - POST /api/credit-purchases : le transfert initialise amountPaid avec les versements déjà enregistrés sur la facture.
+- Vérification navigateur (Agent Browser) : login admin, création facture FV-2026-0001 (Ciment ×10 à 5 000, TVA 18 %, rubrique Commerçant), versements croisés, édition, suppression de versement, PDF.
+- Lint OK (bun run lint), aucun bug visible dans les API (toutes les réponses 200/201).
+
+Stage Summary:
+- Fix 1 vérifié visuellement : sur le PDF, "Total HT — 100 000 FCFA" est en gras (ligne TVA en dessous en normal).
+- Fix 2 vérifié de bout en bout : versement 20 000 dans Commerçant → Factures "Partiel / 20 000 encaissés" ; versement 9 000 dans Factures → Commerçant 29 000 réglés ; édition facture (118 000) → Commerçant mis à jour ; suppression versement → les deux onglets recalculés ; paiement total → statut "Payé" des deux côtés + filigrane PAYÉ sur le PDF.
+- Compte de test créé : admin / admin123.

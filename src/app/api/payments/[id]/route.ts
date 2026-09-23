@@ -1,49 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { syncPaidAmounts } from "@/lib/credit-sync";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** PAYE si amountPaid >= totalTTC, PARTIEL si > 0, sinon NON_PAYE. */
-function computePaymentStatus(totalTTC: number, amountPaid: number): string {
-  if (amountPaid >= totalTTC) return "PAYE";
-  if (amountPaid > 0) return "PARTIEL";
-  return "NON_PAYE";
-}
-
 // ─── DELETE : supprimer un versement et recalculer la facture liée ──────────
 
+/**
+ * Supprime un versement de la facture. Si la facture est transférée en achat
+ * à crédit (Commerçant / Immo), l'achat lié est synchronisé afin que la mise
+ * à jour soit visible à la fois dans Factures et dans Commerçant.
+ */
 export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
 
-    const invoice = await db.$transaction(async (tx) => {
-      const payment = await tx.payment.findUnique({ where: { id } });
-      if (!payment) return null;
-
-      await tx.payment.delete({ where: { id } });
-
-      const target = await tx.invoice.findUnique({ where: { id: payment.invoiceId } });
-      if (!target) return null;
-
-      const agg = await tx.payment.aggregate({
-        where: { invoiceId: payment.invoiceId },
-        _sum: { amount: true },
-      });
-      const sum = agg._sum.amount ?? 0;
-      const amountPaid = Math.min(sum, target.totalTTC);
-      const paymentStatus = computePaymentStatus(target.totalTTC, amountPaid);
-
-      return tx.invoice.update({
-        where: { id: target.id },
-        data: { amountPaid, paymentStatus },
-      });
-    });
-
-    if (!invoice) {
+    const payment = await db.payment.findUnique({ where: { id } });
+    if (!payment) {
       return NextResponse.json({ error: "Versement introuvable" }, { status: 404 });
     }
 
-    return NextResponse.json({ invoice });
+    const target = await db.invoice.findUnique({ where: { id: payment.invoiceId } });
+    if (!target) {
+      return NextResponse.json({ error: "Facture introuvable" }, { status: 404 });
+    }
+
+    await db.payment.delete({ where: { id } });
+
+    // Recalcule le montant payé (versements facture + crédit + manuel) et
+    // synchronise l'achat à crédit lié.
+    await syncPaidAmounts(target.id, -payment.amount);
+
+    const freshInvoice = await db.invoice.findUnique({ where: { id: target.id } });
+
+    return NextResponse.json({ invoice: freshInvoice });
   } catch (error) {
     console.error("DELETE /api/payments/[id]", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

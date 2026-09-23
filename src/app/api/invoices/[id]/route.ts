@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { syncCreditFromInvoice } from "@/lib/credit-sync";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -133,6 +134,10 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
     await logAudit(request, "UPDATE", "Invoice", id, invoice.number);
 
+    // Répercute l'édition (total TTC, montant payé, statut) sur l'achat à crédit
+    // lié afin que la mise à jour soit visible dans Factures ET dans Commerçant.
+    await syncCreditFromInvoice(invoice.id);
+
     return NextResponse.json(invoice);
   } catch (error) {
     console.error("PUT /api/invoices/[id]", error);
@@ -163,6 +168,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
           });
         }
       }
+      // Supprime l'achat à crédit lié (transfert Commerçant / Immo) s'il existe
+      await tx.creditPurchase.deleteMany({ where: { sourceId: id } });
       return tx.invoice.delete({ where: { id } });
     });
 

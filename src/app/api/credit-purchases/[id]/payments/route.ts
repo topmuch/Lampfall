@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { syncPaidAmounts } from "@/lib/credit-sync";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,7 +20,11 @@ export async function GET(_request: NextRequest, { params }: Params) {
   }
 }
 
-/** Ajoute un versement (règlement vers le commerçant / bailleur). */
+/**
+ * Ajoute un versement (règlement vers le commerçant / bailleur).
+ * La facture d'origine est synchronisée (montant payé + statut) afin que la
+ * mise à jour soit visible à la fois dans l'onglet Commerçant et dans Factures.
+ */
 export async function POST(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
@@ -39,13 +44,39 @@ export async function POST(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Achat à crédit introuvable" }, { status: 404 });
     }
 
+    // Plafond : ne pas dépasser le reste à payer (facture d'origine si elle existe)
+    const invoice = await db.invoice.findUnique({ where: { id: purchase.sourceId } });
+    const referenceTotal = invoice ? invoice.totalTTC : purchase.total;
+    const referencePaid = invoice ? invoice.amountPaid : purchase.amountPaid;
+    const reste = Math.max(0, referenceTotal - referencePaid);
+    if (amount > reste + 0.009) {
+      return NextResponse.json(
+        {
+          error: `Le montant dépasse le reste à payer (${new Intl.NumberFormat("fr-FR", {
+            maximumFractionDigits: 0,
+          }).format(reste)} FCFA)`,
+        },
+        { status: 400 }
+      );
+    }
+
     const payment = await db.creditPayment.create({
       data: { purchaseId: id, amount, method, paidAt, note: note || null },
     });
 
-    const updated = await db.creditPurchase.update({
+    if (invoice) {
+      // Synchronise la facture ET l'achat à crédit (montants + statuts)
+      await syncPaidAmounts(purchase.sourceId, amount);
+    } else {
+      // Document source introuvable (donnée orpheline) : mise à jour locale
+      await db.creditPurchase.update({
+        where: { id },
+        data: { amountPaid: { increment: amount } },
+      });
+    }
+
+    const updated = await db.creditPurchase.findUnique({
       where: { id },
-      data: { amountPaid: { increment: amount } },
       include: { payments: { orderBy: { paidAt: "desc" } } },
     });
 

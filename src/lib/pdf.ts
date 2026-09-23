@@ -488,7 +488,8 @@ export async function buildInvoicePDF(invoice: Invoice): Promise<jsPDF> {
     ty += rowH;
   };
 
-  totalRow("Total HT", fmtMoney(invoice.totalHT));
+  // Montant hors taxe affiché en gras (demande client)
+  totalRow("Total HT", fmtMoney(invoice.totalHT), { bold: true });
   totalRow(`TVA (${invoice.taxRate}%)`, fmtMoney(invoice.totalTTC - invoice.totalHT));
   doc.setDrawColor(...GREEN);
   doc.setLineWidth(0.4);
