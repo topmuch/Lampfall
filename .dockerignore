@@ -1,0 +1,15 @@
+# Contexte de build Docker — exclusions (garder backup/, docker/, prisma/)
+node_modules
+.next
+.git
+/db
+/download
+/upload
+*.log
+dev.log
+server.log
+/tests
+tool-results
+.claude
+.zscripts
+prompt

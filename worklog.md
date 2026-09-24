@@ -611,3 +611,21 @@ Stage Summary:
 - Le déploiement Docker devient « zéro configuration » : rebuild de l'image = clone (code + base de référence) → premier boot restaure automatiquement les vraies données
 - Les redémarrages suivants conservent la base du volume (jamais écrasée) et la sauvegardent avant chaque migration
 - Pour actualiser la base embarquée plus tard : remplacer backup/lampfall-db-20260924.db par un dump récent et rebuild
+
+---
+Task ID: deploy-dockerfile-context-fix
+Agent: Z.ai Code (main)
+Task: Build Coolify échoué — « RUN bun install: error: Bun could not find a package.json file » — corriger le Dockerfile
+
+Work Log:
+- Vérifié origin/main : commit 99f6c1d complet (package.json, backup/, docker/ présents) — le dépôt GitHub est sain
+- Analyse du log : bun install en ligne 19 (vs 14 dans notre Dockerfile) + CMD ligne 39 (vs 36) → la build a utilisé une variante de Dockerfile ; cause racine de l'échec : le `git clone` interne depuis le serveur Coolify a été rejeté/limité par GitHub → /app vide → bun install sans package.json
+- Réécrit le Dockerfile en méthode standard : COPY . /app/ (contexte = dépôt cloné par Coolify, commit épinglé, plus aucun téléchargement GitHub au build) + filet de sécurité `if [ ! -f package.json ]` → clonage shallow de secours avec erreur explicite
+- Créé .dockerignore (exclut node_modules, .next, .git, /db, logs, tests — préserve backup/, docker/, prisma/, src/)
+- Simulé le contexte de build depuis un clone frais de origin/main : package.json ✓, backup/lampfall-db-20260924.db ✓, docker/start.sh ✓, fallback ignoré quand le contexte est complet ✓
+- Commit + push vers origin/main
+
+Stage Summary:
+- Le build ne dépend plus d'un accès GitHub depuis le serveur de déploiement : fin des échecs intermittents de type rate limit
+- Le clone de secours ne se déclenche que si le contexte est vide, avec message d'erreur clair
+- La base de référence backup/lampfall-db-20260924.db reste embarquée → premier boot Docker = vraies données restaurées automatiquement
