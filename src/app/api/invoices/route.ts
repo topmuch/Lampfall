@@ -114,6 +114,18 @@ export async function POST(request: NextRequest) {
     const deliveryStatus = body.deliveryStatus === "LIVRE" ? "LIVRE" : "NON_LIVRE";
     const updateStock = type === "VENTE" && body.updateStock !== false;
 
+    // Valider le clientId : s'il n'existe plus en base (client supprimé, données
+    // réinitialisées…), on ne bloque PAS la création — on retombe sur clientId null
+    // en conservant le nom saisi (client comptoir).
+    let clientId: string | null = body.clientId || null;
+    if (clientId) {
+      const clientExists = await db.client.findUnique({
+        where: { id: clientId },
+        select: { id: true },
+      });
+      if (!clientExists) clientId = null;
+    }
+
     const year = new Date().getFullYear();
     const prefix = NUMBER_PREFIXES[type];
     const count = await db.invoice.count({
@@ -145,7 +157,7 @@ export async function POST(request: NextRequest) {
         data: {
           number,
           type,
-          clientId: body.clientId || null,
+          clientId,
           clientName: (body.clientName ?? "").toString().trim(),
           clientPhone: body.clientPhone?.toString().trim() || null,
           clientAddress: body.clientAddress?.toString().trim() || null,

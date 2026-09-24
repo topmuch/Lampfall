@@ -75,6 +75,19 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
     const updateStock = existing.type === "VENTE" && body.updateStock !== false;
 
+    // Valider le clientId : s'il n'existe plus en base (client supprimé, données
+    // réinitialisées…), on ne bloque PAS la modification — on retombe sur null
+    // en conservant le nom saisi.
+    let nextClientId: string | null =
+      body.clientId !== undefined ? body.clientId || null : existing.clientId;
+    if (nextClientId) {
+      const clientExists = await db.client.findUnique({
+        where: { id: nextClientId },
+        select: { id: true },
+      });
+      if (!clientExists) nextClientId = null;
+    }
+
     const invoice = await db.$transaction(async (tx) => {
       if (updateStock) {
         // Restaurer le stock des anciens articles liés à un produit
@@ -103,7 +116,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       return tx.invoice.update({
         where: { id },
         data: {
-          clientId: body.clientId !== undefined ? body.clientId || null : existing.clientId,
+          clientId: nextClientId,
           clientName: body.clientName?.toString().trim() ?? existing.clientName,
           clientPhone: body.clientPhone?.toString().trim() || null,
           clientAddress: body.clientAddress?.toString().trim() || null,
