@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { nextNumber, NUMBER_PREFIXES } from "@/lib/constants";
+import { NUMBER_PREFIXES } from "@/lib/constants";
+import { generateDocumentNumber, withNumberRetry } from "@/lib/numbering";
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,39 +51,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ajoutez au moins un article" }, { status: 400 });
     }
 
-    const year = new Date().getFullYear();
-    const count = await db.order.count({
-      where: { number: { startsWith: `CMD-${year}-` } },
-    });
-    const number = nextNumber(NUMBER_PREFIXES.COMMANDE, count, year);
-
     const status = ["EN_COURS", "CONFIRMEE", "LIVREE", "ANNULEE"].includes(body.status)
       ? body.status
       : "EN_COURS";
 
-    const order = await db.order.create({
-      data: {
-        number,
-        clientId: body.clientId || null,
-        clientName: (body.clientName ?? "").toString().trim(),
-        date: body.date ? new Date(body.date) : new Date(),
-        deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
-        status,
-        notes: body.notes?.toString().trim() || null,
-        items: {
-          create: items.map((i: (typeof items)[number]) => ({
-            productId: i.productId,
-            productName: i.productName,
-            category: i.category,
-            unit: i.unit,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            total: i.quantity * i.unitPrice,
-          })),
-        },
-      },
-      include: { items: true },
-    });
+    // Numérotation sécurisée (max existant + relance sur collision)
+    const { result: order } = await withNumberRetry(
+      () => generateDocumentNumber("order", NUMBER_PREFIXES.COMMANDE),
+      (number) =>
+        db.order.create({
+          data: {
+            number,
+            clientId: body.clientId || null,
+            clientName: (body.clientName ?? "").toString().trim(),
+            date: body.date ? new Date(body.date) : new Date(),
+            deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
+            status,
+            notes: body.notes?.toString().trim() || null,
+            items: {
+              create: items.map((i: (typeof items)[number]) => ({
+                productId: i.productId,
+                productName: i.productName,
+                category: i.category,
+                unit: i.unit,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+                total: i.quantity * i.unitPrice,
+              })),
+            },
+          },
+          include: { items: true },
+        })
+    );
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
     console.error("POST /api/orders", error);

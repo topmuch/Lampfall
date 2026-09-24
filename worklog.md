@@ -662,3 +662,21 @@ Stage Summary:
 - L'aperçu local est de nouveau 100 % opérationnel ; la création de factures y fonctionne
 - La base de référence dans backup/ (versionnée) rend la récupération triviale après chaque resync sandbox — même mécanique que le démarrage Docker
 - Si l'utilisateur voit encore « erreur serveur » sur SON déploiement Coolify : vérifier que le dernier Dockerfile (fallback v2, commit 54b2ce5) a bien été recollé et rebuild, et consulter les logs d'exécution Coolify pour la ligne d'erreur réelle
+
+---
+Task ID: fix-invoice-number-collision
+Agent: Z.ai Code (main)
+Task: « erreur serveur » à la création de facture (déploiement Coolify) — P2002 Unique constraint failed on (number)
+
+Work Log:
+- Log Coolify fourni par l'utilisateur : PrismaClientKnownRequestError P2002 sur prisma.invoice.create() — champ number
+- Cause racine : numérotation par COMPTAGE (nextNumber = count+1) dans POST /api/invoices et POST /api/orders — dès qu'un document est supprimé, le compteur retombe sur un numéro existant → collision d'unicité → 500
+- Créé src/lib/numbering.ts : generateDocumentNumber (basé sur le MAXIMUM existant du préfixe/année, parse numérique du suffixe) + withNumberRetry (relance automatique jusqu'à 5 fois en régénérant le numéro si P2002 — couvre aussi les créations concurrentes)
+- invoices/route.ts POST : transaction enveloppée dans withNumberRetry ; orders/route.ts POST : idem autour de order.create (+ rétablissement du calcul de status omis lors de l'édition, vérifié)
+- Lint OK ; démonstration chiffrée : après suppression de FV-2026-0005 (FV max = 0007) → ancien code générait FV-2026-0007 (déjà pris → P2002), nouveau code génère FV-2026-0008 (libre)
+- Test bout en bout sur le serveur local : création FV-2026-0008 → suppression → re-création FV-2026-0008 sans erreur ; données de test supprimées (retour à 11 factures, stock 150)
+
+Stage Summary:
+- La création de factures/commandes ne peut plus échouer par collision de numéro, même après suppressions ou créations simultanées
+- Les numéros existants ne sont PAS renumérotés ; les trous éventuels restent simplement des trous
+- Push effectué ; l'utilisateur doit Redeployer sur Coolify (le Dockerfile en mode collé récupère le dernier main via le fallback clone)
