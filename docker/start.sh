@@ -1,6 +1,8 @@
 #!/bin/sh
 # ── ETS LAMP FALL — démarrage Docker (Coolify) ─────────────────────────────
 # Séquence d'initialisation à CHAQUE démarrage du conteneur :
+#   0. PREMIER démarrage uniquement : restauration de la base de référence
+#      embarquée dans le dépôt (backup/*.db) si aucune base n'existe encore
 #   1. Sauvegarde de la base existante (rotative, 10 dernières)
 #   2. Synchronisation du schéma Prisma (additif — aucune donnée perdue)
 #   3. Compte administrateur + paramètres société (si absents)
@@ -18,7 +20,18 @@ echo "════════════════════════�
 
 mkdir -p /app/data
 
-# ── 1/4 Sauvegarde pré-migration ───────────────────────────────────────────
+# ── 0/5 Restauration initiale (premier démarrage) ──────────────────────────
+if [ -n "${DBFILE:-}" ] && [ ! -s "$DBFILE" ]; then
+  SEED_DB="$(ls -1 /app/backup/*.db 2>/dev/null | tail -n 1)"
+  if [ -n "$SEED_DB" ]; then
+    mkdir -p "$(dirname "$DBFILE")"
+    cp "$SEED_DB" "$DBFILE" && echo "✔ Premier démarrage : base restaurée depuis $SEED_DB"
+  else
+    echo "ℹ Aucune base existante ni base de référence dans /app/backup — démarrage à vide"
+  fi
+fi
+
+# ── 1/5 Sauvegarde pré-migration ───────────────────────────────────────────
 if [ -n "${DBFILE:-}" ] && [ -f "$DBFILE" ]; then
   mkdir -p "$(dirname "$DBFILE")/backups"
   BK="$(dirname "$DBFILE")/backups/$(basename "$DBFILE" .db)-$(date +%Y%m%d-%H%M%S).db"
@@ -27,24 +40,24 @@ if [ -n "${DBFILE:-}" ] && [ -f "$DBFILE" ]; then
   ls -1t "$(dirname "$DBFILE")"/backups/*.db 2>/dev/null | tail -n +11 | xargs -r rm -f
 fi
 
-# ── 2/4 Schéma Prisma ──────────────────────────────────────────────────────
-echo "── 2/4 Synchronisation du schéma (prisma db push)…"
+# ── 2/5 Schéma Prisma ──────────────────────────────────────────────────────
+echo "── 2/5 Synchronisation du schéma (prisma db push)…"
 if npx prisma db push --skip-generate; then
   echo "✔ Schéma à jour (colonnes manquantes ajoutées automatiquement)"
 else
   echo "⚠ db push a échoué — le serveur démarre quand même, vérifiez les logs" >&2
 fi
 
-# ── 3/4 Admin + paramètres ─────────────────────────────────────────────────
-echo "── 3/4 Compte administrateur + paramètres société…"
+# ── 3/5 Admin + paramètres ─────────────────────────────────────────────────
+echo "── 3/5 Compte administrateur + paramètres société…"
 if bun prisma/seed-v3.ts; then
   echo "✔ Administrateur prêt (admin / admin123 par défaut)"
 else
   echo "⚠ seed a échoué" >&2
 fi
 
-# ── 4/4 Catalogue produits & prix ──────────────────────────────────────────
-echo "── 4/4 Catalogue produits (prix, stocks) + clients…"
+# ── 4/5 Catalogue produits & prix ──────────────────────────────────────────
+echo "── 4/5 Catalogue produits (prix, stocks) + clients…"
 if bun prisma/restore-demo.ts; then
   echo "✔ Catalogue vérifié/complété"
 else

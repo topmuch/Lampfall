@@ -593,3 +593,21 @@ Stage Summary:
 - Le nouveau conteneur s'auto-répare au démarrage : schéma synchronisé, admin créé, catalogue/prix complétés, sauvegarde auto avant chaque migration
 - Instructions transmises à l'utilisateur : reconstruire l'image Docker + optionnellement restaurer lampfall-db-20260924.db (release) dans /app/data/lampfall.db pour retrouver les vraies données
 - Aucun changement fonctionnel applicatif — Dockerfile + scripts d'init uniquement
+
+---
+Task ID: deploy-embed-release-db
+Agent: Z.ai Code (main)
+Task: Intégrer la base de la release backup-2026-09-24 dans main (demande utilisateur : « supprime les fichiers du main et pousse la release sur main »)
+
+Work Log:
+- Vérifié main : aucun fichier DB suivi (db/ ignoré) — rien à supprimer ; décision de NE PAS effacer le code de main (la release ne contient que le .db, sans code plus de build)
+- Téléchargé l'asset release lampfall-db-20260924.db → backup/lampfall-db-20260924.db dans le dépôt (204 Ko, vérifié : 24 produits 0 prix nul, 6 clients, 11 factures 2 489 210 FCFA, ancien schéma sans colonnes maintenance)
+- docker/start.sh : nouvelle étape 0/5 — au PREMIER démarrage uniquement (si /app/data/lampfall.db absent ou vide), copie automatique de la base de référence /app/backup/*.db (dernier par nom) avant toute migration
+- Ordre garanti : restauration → db push (ajoute maintenanceActive/maintenanceSince à l'ancien schéma) → seed admin → catalogue → serveur
+- Simulation complète du déploiement Docker exécutée localement : base restaurée, schéma mis à jour, admin présent, 24 produits prix OK, 11 factures intactes
+- Commit + push vers origin/main
+
+Stage Summary:
+- Le déploiement Docker devient « zéro configuration » : rebuild de l'image = clone (code + base de référence) → premier boot restaure automatiquement les vraies données
+- Les redémarrages suivants conservent la base du volume (jamais écrasée) et la sauvegardent avant chaque migration
+- Pour actualiser la base embarquée plus tard : remplacer backup/lampfall-db-20260924.db par un dump récent et rebuild
