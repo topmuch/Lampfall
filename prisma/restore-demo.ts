@@ -66,7 +66,11 @@ async function main() {
   let created = 0;
   let kept = 0;
   for (const p of PRODUCTS) {
-    const existing = await db.product.findFirst({ where: { reference: p.reference } });
+    // Correspondance par référence OU par nom : évite les doublons si la base
+    // existante contient les mêmes produits sous une référence différente.
+    const existing = await db.product.findFirst({
+      where: { OR: [{ reference: p.reference }, { name: p.name }] },
+    });
     if (existing) {
       // Le produit existe : on ne modifie QUE les prix s'ils sont à 0 (ne jamais écraser une saisie utilisateur)
       if (existing.purchasePrice === 0 && existing.salePrice === 0) {

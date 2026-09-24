@@ -30,5 +30,7 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV DATABASE_URL=file:/app/data/lampfall.db
 
-# Commande de demarrage - schema + admin par defaut + serveur
-CMD sh -c "mkdir -p /app/data && export DATABASE_URL=file:/app/data/lampfall.db && npx prisma db push --skip-generate 2>/dev/null || true && bun prisma/seed-v3.ts 2>/dev/null || true && exec node .next/standalone/server.js"
+# Commande de demarrage - script d'initialisation complet :
+#   sauvegarde pre-migration + schema Prisma (additif) + compte admin
+#   + catalogue produits avec prix (idempotent, ne supprime rien) + serveur
+CMD ["sh", "docker/start.sh"]

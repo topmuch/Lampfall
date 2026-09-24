@@ -570,3 +570,26 @@ Stage Summary:
 - Mode maintenance opérationnel de bout en bout ; l'admin pilote tout depuis Paramètres
 - API settings désormais robuste aux mises à jour partielles
 - Note : après toute modification de prisma/schema.prisma, régénérer le client (bun run db:generate) et redémarrer le serveur de dev
+
+---
+Task ID: deploy-docker-init-fix
+Agent: Z.ai Code (main)
+Task: Diagnostic « prix produits à 0 + erreur serveur à la création de factures (Factures/Commerçant/Immo) » — cause : déploiement Docker avec ancienne image/base
+
+Work Log:
+- Vérifié la base locale sandbox : intacte (24 produits avec prix, 6 clients, 11 factures, 11 catégories)
+- Testé les API via curl : POST /api/invoices → 201 pour les 3 flux (VENTE, + transfert crédit COMMERCANT/IMMO via /api/credit-purchases)
+- Testé le parcours complet au navigateur (agent-browser) : création facture onglet Factures (FV-2026-0008 ✔), onglet Commerçant (FV-2026-0009 ✔ classé crédit), onglet Immo (FV-2026-0010 ✔ classé crédit), page Produits affiche bien les prix
+- Conclusion : le dernier code GitHub fonctionne à 100 % ; les symptômes viennent du conteneur Docker de l'utilisateur (image clonée avant les correctifs et/ou volume /app/data avec une vieille base sans catalogue ni nouvelles colonnes)
+- Téléchargé et vérifié la release backup-2026-09-24 : asset lampfall-db-20260924.db impeccable (24 produits avec prix, 6 clients, 11 factures)
+- Nettoyé toutes les données de test créées pendant le diagnostic (3 factures, 2 credit-purchases, stocks restaurés — retour à l'état d'origine 11 factures)
+- Créé docker/start.sh : séquence d'init à chaque démarrage conteneur — (1) sauvegarde pré-migration rotative 10, (2) prisma db push additif avec logs visibles (plus de 2>/dev/null), (3) seed-v3 admin, (4) restore-demo catalogue prix, (5) exec serveur standalone
+- Dockerfile : CMD ["sh", "docker/start.sh"] remplace l'ancienne ligne CMD silencieuse
+- prisma/restore-demo.ts : correspondance produits par référence OU nom (anti-doublons si l'ancienne base a des références différentes)
+- Testé la chaîne d'init sur base temporaire : scénario base vide (tout créé ✔) et scénario base avec prix à 0 (prix corrigés automatiquement ✔, aucun doublon ✔, produits perso non touchés ✔)
+
+Stage Summary:
+- Les erreurs signalées n'existent PAS dans le dernier code — elles proviennent du déploiement Docker obsolète de l'utilisateur
+- Le nouveau conteneur s'auto-répare au démarrage : schéma synchronisé, admin créé, catalogue/prix complétés, sauvegarde auto avant chaque migration
+- Instructions transmises à l'utilisateur : reconstruire l'image Docker + optionnellement restaurer lampfall-db-20260924.db (release) dans /app/data/lampfall.db pour retrouver les vraies données
+- Aucun changement fonctionnel applicatif — Dockerfile + scripts d'init uniquement
