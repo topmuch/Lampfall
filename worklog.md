@@ -551,3 +551,22 @@ Stage Summary:
 - Données réelles de l'utilisateur restaurées (état au 20/09 22h15) ; les mouvements postérieurs à cette date restent perdus
 - Sauvegarde durable disponible sur GitHub : releases/tag/backup-2026-09-24
 - Recommandation faite à l'utilisateur : demander une mise à jour de cette release régulièrement
+
+---
+Task ID: feature-maintenance-mode
+Agent: Z.ai Code (main)
+Task: Bouton « Maintenance en cours » dans Paramètres avec logo et compteur jours/mois/années
+
+Work Log:
+- Schéma Setting : +maintenanceActive (bool) et +maintenanceSince (DateTime), migration additive via db:push (sauvegarde auto préalable + régénération client Prisma + redémarrage dev requis)
+- API PUT /api/settings : gestion du couple maintenanceActive/maintenanceSince (horodatage auto à l'activation, reset à la désactivation) ; mise à jour partielle sûre — les champs absents ne sont plus écrasés (correctif : le slogan était vidé par un PUT partiel)
+- Nouveau composant maintenance-screen.tsx : écran plein écran vert/or, logo société (custom ou défaut), titre animé, compteur calendaire exact jours/mois/années (pluriels gérés), « depuis le … », contact, polling 45 s pour libération auto
+- app-shell : employés bloqués pendant la maintenance (admin exempté) ; avant connexion, écran affiché avec bouton discret « Espace administrateur » révélant le login
+- settings-view : carte Maintenance (badge d'état, mini-compteur, bouton Activer/Désactiver)
+- Tests navigateur complets : activation par l'admin, écran visiteur, blocage employé (employe1 créé pour le test puis supprimé), compteur vérifié avec date passée (9 jours/3 mois/1 année depuis le 15/06/2025), désactivation → retour immédiat à l'app
+- Commit aef271f poussé vers origin/main
+
+Stage Summary:
+- Mode maintenance opérationnel de bout en bout ; l'admin pilote tout depuis Paramètres
+- API settings désormais robuste aux mises à jour partielles
+- Note : après toute modification de prisma/schema.prisma, régénérer le client (bun run db:generate) et redémarrer le serveur de dev
