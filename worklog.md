@@ -644,3 +644,21 @@ Work Log:
 Stage Summary:
 - Le Dockerfile fonctionne désormais dans les DEUX modes Coolify : « Dockerfile location /Dockerfile » (contexte complet) ET « Dockerfile collé » (secours par clonage temporaire)
 - Contenu à recoller par l'utilisateur fourni dans la réponse ; recommandation répétée d'utiliser Dockerfile location=/Dockerfile quand possible
+
+---
+Task ID: sandbox-resync-recovery-2
+Agent: Z.ai Code (main)
+Task: « La création de facture affiche toujours erreur serveur » — sandbox resynchronisé : db/ supprimée + serveur arrêté
+
+Work Log:
+- Constat : db/custom.db disparue (resync sandbox, dossier gitignore) + serveur dev arrêté → l'aperçu était en erreur
+- Récupération immédiate grâce à la base de référence embarquée dans git : cp backup/lampfall-db-20260924.db db/custom.db
+- prisma db push (colonnes maintenance ajoutées) + seed admin (déjà présent)
+- Vérifié : 24 produits 0 prix nul, 6 clients, 11 factures (2 489 210 FCFA), maintenanceActive présent
+- Serveur relancé (setsid nohup bun run dev) → HTTP 200
+- Test création facture via API : HTTP 201 (FV-2026-0008) puis suppression de la facture de test, stock et compteur intacts (11 factures, stock 150)
+
+Stage Summary:
+- L'aperçu local est de nouveau 100 % opérationnel ; la création de factures y fonctionne
+- La base de référence dans backup/ (versionnée) rend la récupération triviale après chaque resync sandbox — même mécanique que le démarrage Docker
+- Si l'utilisateur voit encore « erreur serveur » sur SON déploiement Coolify : vérifier que le dernier Dockerfile (fallback v2, commit 54b2ce5) a bien été recollé et rebuild, et consulter les logs d'exécution Coolify pour la ligne d'erreur réelle
