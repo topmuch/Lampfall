@@ -532,3 +532,22 @@ Stage Summary:
 - Catalogue produits + prix + clients démo de retour dans la sandbox ; les vraies données métier de l'utilisateur (si différentes) restent à réimporter (Excel/CSV) ou à restaurer depuis un backup externe
 - Protection anti-perte : sauvegarde automatique avant chaque db:push, commande db:backup manuelle, rotation de 20 snapshots
 - Option proposée à l'utilisateur : versionner la base sur GitHub (sortir /db/ du .gitignore) pour survivre aux resynchronisations d'environnement
+
+---
+Task ID: restore-from-git-history-backup
+Agent: Z.ai Code (main)
+Task: Récupérer les vraies données via la sauvegarde indiquée par l'utilisateur (releases GitHub)
+
+Work Log:
+- Inspecté les releases (v.1, v.2) : aucun asset, tags pointant vers du code récent sans base
+- Fouillé TOUT l'historique git : db/custom.db avait été commitée avant le gitignore — dernier commit la contenant : 926fef4 (20/09, 22h15, 124 Ko)
+- Extrait la base, vérifié le contenu : 24 produits TOUS avec prix, 6 clients, 11 factures (5 783 298 FCFA), 3 commandes, 3 achats, 4 locataires + 8 loyers, 11 catégories
+- Comparé ancien/nouveau schéma Prisma : différences purement additives → migration sans perte possible
+- Procédure : sauvegarde de l'état démo (db:backup) → arrêt serveur → remplacement db/custom.db → db:push (ajout User/Setting/CreditPurchase/Payment/StockMovement/AuditLog) → db:seed (admin/admin123) → redémarrage (setsid)
+- Vérifié en navigation réelle : dashboard (créances 965 k FCFA, courbe ventes), Factures (7 documents, 2 489 210 FCFA, reste 965 240), Produits (24 réf., stock 5 214 000 FCFA, prix affichés)
+- Créé une VRAIE release GitHub de sauvegarde : tag backup-2026-09-24 + asset lampfall-db-20260924.db (200 Ko)
+
+Stage Summary:
+- Données réelles de l'utilisateur restaurées (état au 20/09 22h15) ; les mouvements postérieurs à cette date restent perdus
+- Sauvegarde durable disponible sur GitHub : releases/tag/backup-2026-09-24
+- Recommandation faite à l'utilisateur : demander une mise à jour de cette release régulièrement
