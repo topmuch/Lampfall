@@ -8,9 +8,12 @@
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "db:push": "prisma db push --accept-data-loss",
+    "predb:push": "bun prisma/backup-db.ts",
     "db:generate": "prisma generate",
     "db:seed": "bun prisma/seed-v3.ts",
-    "setup": "bun run db:push && bun run db:seed",
+    "db:restore-demo": "bun prisma/restore-demo.ts",
+    "db:backup": "bun prisma/backup-db.ts",
+    "setup": "bun run db:push && bun run db:seed && bun run db:restore-demo",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset"
   },
