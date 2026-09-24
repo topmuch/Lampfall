@@ -513,3 +513,22 @@ Work Log:
 Stage Summary:
 - GitHub = local = 195b1e7 ; un clone frais fonctionne via : cp .env.example .env && bun install && bun run setup && bun run dev (connexion admin/admin123)
 - La création de facture ne peut plus échouer sur un client disparu ; l'ancienne erreur « Erreur serveur » à la création est éliminée
+
+---
+Task ID: restore-products-prices
+Agent: Z.ai Code (main)
+Task: « Tous les produits affichent 0 pour le prix / ont disparu » — diagnostic + restauration + protection
+
+Work Log:
+- Constaté : base sandbox totalement vide (0 produit, 0 client) — la base SQLite (gitignorée) a été effacée lors d'une resynchronisation d'environnement antérieure
+- Cherché toute voie de récupération : aucun fichier .db/.sqlite ailleurs, aucun backup sur le disque, aucun inode supprimé encore ouvert (/proc/*/fd) → données d'origine irrécupérables
+- Créé prisma/restore-demo.ts : restauration sécurisée idempotente (upserts, aucune suppression) — 11 catégories, 23 produits avec prix d'achat/vente, 5 clients ; ne ré-écrase jamais un prix saisi (sauf si 0)
+- Créé prisma/backup-db.ts : snapshots horodatés de db/custom.db dans db/backups/ (rotation 20) ; câblé en predb:push + bun run db:backup
+- Étendu setup : db:push + db:seed + db:restore-demo
+- Restauré et vérifié en navigation réelle : onglet Produits — 23 références, valeur du stock 4 758 000 FCFA, prix affichés
+- Commit 3bc9c04 poussé vers origin/main
+
+Stage Summary:
+- Catalogue produits + prix + clients démo de retour dans la sandbox ; les vraies données métier de l'utilisateur (si différentes) restent à réimporter (Excel/CSV) ou à restaurer depuis un backup externe
+- Protection anti-perte : sauvegarde automatique avant chaque db:push, commande db:backup manuelle, rotation de 20 snapshots
+- Option proposée à l'utilisateur : versionner la base sur GitHub (sortir /db/ du .gitignore) pour survivre aux resynchronisations d'environnement
