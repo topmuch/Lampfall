@@ -12,11 +12,14 @@ WORKDIR /app
 # Copie du dépôt depuis le contexte de build fourni par la plateforme
 COPY . /app/
 
-# Filet de sécurité : si le contexte est vide (configuration inhabituelle),
-# on retombe sur un clonage GitHub explicite — erreur claire si bloqué.
+# Filet de sécurité : si le contexte ne contient pas le dépôt (mode Dockerfile
+# collé dans Coolify), on clone depuis GitHub dans un dossier temporaire puis
+# on copie — fonctionne même si /app contient déjà des fichiers.
 RUN if [ ! -f package.json ]; then \
-      echo "⚠ Contexte de build vide → clonage GitHub de secours…" && \
-      git clone --depth 1 https://github.com/topmuch/Lampfall.git . ; \
+      echo "⚠ Contexte de build sans dépôt → clonage GitHub de secours…" && \
+      git clone --depth 1 https://github.com/topmuch/Lampfall.git /tmp/lampfall-repo && \
+      cp -a /tmp/lampfall-repo/. /app/ && \
+      rm -rf /tmp/lampfall-repo ; \
     fi
 
 # Installation des dépendances (bun.lock copié pour un cache de couches efficace)

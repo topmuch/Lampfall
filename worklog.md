@@ -629,3 +629,18 @@ Stage Summary:
 - Le build ne dépend plus d'un accès GitHub depuis le serveur de déploiement : fin des échecs intermittents de type rate limit
 - Le clone de secours ne se déclenche que si le contexte est vide, avec message d'erreur clair
 - La base de référence backup/lampfall-db-20260924.db reste embarquée → premier boot Docker = vraies données restaurées automatiquement
+
+---
+Task ID: deploy-dockerfile-fallback-v2
+Agent: Z.ai Code (main)
+Task: Build Coolify échoué n°2 — fallback clonage « destination path '.' already exists » — l'utilisateur colle le Dockerfile dans Coolify (mode Dockerfile personnalisé, contexte SANS le dépôt)
+
+Work Log:
+- Analyse du log : COPY . /app/ exécuté (0.0s) mais package.json absent → l'utilisateur utilise le mode « Dockerfile collé » de Coolify : le contexte de build NE CONTIENT PAS le dépôt (quelques fichiers seulement) ; le fallback clonait dans « . » → échec car /app non vide (exit 128)
+- Corrigé le filet de secours dans le Dockerfile : clonage vers /tmp/lampfall-repo puis `cp -a /tmp/lampfall-repo/. /app/` + suppression du temp — fonctionne même si /app contient déjà des fichiers
+- Testé localement le scénario exact (dossier non vide sans package.json) : clone ✓, package.json ✓, base de référence ✓, docker/start.sh ✓, code source ✓, fichiers préexistants conservés ✓
+- Commit + push vers origin/main (les deux modes de build Coolify sont maintenant couverts : dépôt complet → fallback ignoré ; contexte vide/partiel → secours par clone temporaire)
+
+Stage Summary:
+- Le Dockerfile fonctionne désormais dans les DEUX modes Coolify : « Dockerfile location /Dockerfile » (contexte complet) ET « Dockerfile collé » (secours par clonage temporaire)
+- Contenu à recoller par l'utilisateur fourni dans la réponse ; recommandation répétée d'utiliser Dockerfile location=/Dockerfile quand possible
