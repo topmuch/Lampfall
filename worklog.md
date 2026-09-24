@@ -494,3 +494,22 @@ Stage Summary:
 - Nouvelle règle de classement : toute facture/proforma classé à crédit (créé via le bouton « Nouvelle facture » de Commerçant/Immo, ou transféré depuis Factures/Proforma) est recensé UNIQUEMENT dans l'onglet Commerçant ou Immo ; il disparaît de Factures/Proforma et du tableau « Dernières factures » du dashboard (les stats financières globales restent complètes).
 - Les onglets Commerçant/Immo sont autonomes : création de facture à crédit (classement verrouillé), modification du document source (crayon), versements, annulation de transfert (qui rend le document visible à nouveau dans Factures/Proforma).
 - Données de test : FV-2026-0001 (Payé, crédit Commerçant), FV-2026-0002 (Non payé Livré, crédit Commerçant — Quincaillerie Sow, 59 000), FV-2026-0003 (vente normale, visible dans Factures).
+
+---
+Task ID: sync-fix-invoice
+Agent: Z.ai Code (main)
+Task: Synchroniser GitHub ↔ local + corriger « impossible de créer une facture »
+
+Work Log:
+- Vérifié git : local et origin/main au même commit 758b274 ; bruit de diff (filemode) neutralisé via core.filemode false
+- Diagnostiqué le 500 sur POST /api/invoices : violation de clé étrangère P2003 quand clientId inexistant (client supprimé / données réinitialisées, liste clients obsolète côté UI)
+- Corrigé POST et PUT /api/invoices : validation du clientId en base avant écriture, repli sur clientId null en conservant le nom saisi
+- Constaté qu'un clone GitHub était inutilisable (.env et /db/ gitignorés, aucun compte utilisateur en base)
+- Ajouté .env.example (DATABASE_URL relatif file:../db/custom.db) + exception !.env.example dans .gitignore
+- Ajouté scripts package.json : db:seed (seed-v3 : admin/admin123 + paramètres société) et setup (db:push + db:seed)
+- Testé en navigation réelle (agent-browser) : login admin, création facture via éditeur → FV-2026-0001, 3×7500 + TVA 18 % = 26 550 FCFA, apparaît dans la liste ; données de test nettoyées ensuite
+- Commit 195b1e7 poussé vers origin/main
+
+Stage Summary:
+- GitHub = local = 195b1e7 ; un clone frais fonctionne via : cp .env.example .env && bun install && bun run setup && bun run dev (connexion admin/admin123)
+- La création de facture ne peut plus échouer sur un client disparu ; l'ancienne erreur « Erreur serveur » à la création est éliminée
