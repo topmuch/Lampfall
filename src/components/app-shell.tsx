@@ -54,6 +54,7 @@ import { AuditView } from "@/components/audit-view";
 import { UsersView } from "@/components/users-view";
 import { SettingsView } from "@/components/settings-view";
 import { LoginView } from "@/components/login-view";
+import { MaintenanceScreen } from "@/components/maintenance-screen";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useSettingsStore } from "@/lib/settings-store";
 import { authFetch, clearSession, getCachedUser, verifySession } from "@/lib/auth-client";
@@ -313,6 +314,8 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authState, setAuthState] = useState<"loading" | "anon" | "auth">("loading");
+  // Mode maintenance : permet à l'administrateur d'accéder au login malgré l'écran de maintenance
+  const [forceLogin, setForceLogin] = useState(false);
   // Signal : ouvrir directement la page « Nouvelle facture » (bouton du tableau de bord)
   const [pendingNewInvoice, setPendingNewInvoice] = useState(false);
   const { settings, load: loadSettings } = useSettingsStore();
@@ -369,10 +372,25 @@ export function AppShell() {
 
   // ─── Écran de connexion ───────────────────────────────────────────────────
   if (authState === "anon" || !user) {
+    // Maintenance active (avant connexion) : écran dédié + accès administrateur discret
+    if (settings?.maintenanceActive && !forceLogin) {
+      return (
+        <MaintenanceScreen
+          settings={settings}
+          onRelease={loadSettings}
+          onAdminAccess={() => setForceLogin(true)}
+        />
+      );
+    }
     return <LoginView settings={settings} onSuccess={(u) => { setUser(u); setAuthState("auth"); setView("dashboard"); }} />;
   }
 
   const isAdmin = user.role === "ADMIN";
+
+  // Maintenance active : les employés voient l'écran dédié (l'administrateur garde l'accès)
+  if (settings?.maintenanceActive && !isAdmin) {
+    return <MaintenanceScreen settings={settings} onRelease={loadSettings} />;
+  }
   const companyName = settings?.nomSociete ?? "LAMPE FALL";
   const companyTagline = settings?.tagline ?? "";
 

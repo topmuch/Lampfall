@@ -23,12 +23,15 @@ import {
   DatabaseBackup,
   ImagePlus,
   Loader2,
+  Power,
   Save,
   Trash2,
+  Wrench,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-client";
 import { invalidateCompanyCache } from "@/lib/pdf";
+import { MaintenanceMiniCounter } from "@/components/maintenance-screen";
 import { useSettingsStore } from "@/lib/settings-store";
 import type { Settings } from "@/lib/types";
 
@@ -61,6 +64,7 @@ export function SettingsView() {
   const [restoreData, setRestoreData] = useState<unknown>(null);
   const [restoreFileName, setRestoreFileName] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -97,6 +101,34 @@ export function SettingsView() {
       toast({ title: "Erreur", description: err instanceof Error ? err.message : "Erreur inconnue", variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Bascule du mode maintenance (bouton dédié, indépendant du formulaire société)
+  const toggleMaintenance = async () => {
+    if (!settings) return;
+    const target = !settings.maintenanceActive;
+    setMaintenanceBusy(true);
+    try {
+      const res = await authFetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...settings, maintenanceActive: target }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erreur d'enregistrement");
+      setSettings(json);
+      useSettingsStore.getState().setSettings(json);
+      toast({
+        title: target ? "Maintenance activée" : "Maintenance désactivée",
+        description: target
+          ? "Les employés voient désormais l'écran « Maintenance en cours »."
+          : "L'application redevient accessible à tous.",
+      });
+    } catch (err) {
+      toast({ title: "Erreur", description: err instanceof Error ? err.message : "Erreur inconnue", variant: "destructive" });
+    } finally {
+      setMaintenanceBusy(false);
     }
   };
 
@@ -401,6 +433,50 @@ export function SettingsView() {
           <p className="text-xs text-muted-foreground sm:ml-auto sm:text-right">
             La restauration remplace toutes les données actuelles.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Maintenance en cours */}
+      <Card className={settings.maintenanceActive ? "card-luxe border-amber-500/50" : "card-luxe"}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wrench className={`h-4 w-4 ${settings.maintenanceActive ? "animate-pulse text-amber-500" : "text-primary"}`} aria-hidden />
+            Maintenance en cours
+          </CardTitle>
+          <CardDescription>
+            Bloque l&apos;accès applicatif aux employés : un écran affiche le logo de la société et un
+            compteur (jours, mois, années). L&apos;administrateur conserve toujours l&apos;accès.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {settings.maintenanceActive ? (
+            <div className="flex flex-col gap-1">
+              <Badge className="w-fit bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40">
+                <Wrench className="mr-1 h-3 w-3" aria-hidden /> Maintenance active
+              </Badge>
+              {settings.maintenanceSince && (
+                <MaintenanceMiniCounter since={settings.maintenanceSince} />
+              )}
+            </div>
+          ) : (
+            <Badge variant="secondary" className="w-fit">Mode normal</Badge>
+          )}
+          <Button
+            onClick={toggleMaintenance}
+            disabled={maintenanceBusy}
+            variant={settings.maintenanceActive ? "destructive" : "default"}
+            className="min-h-11 min-w-56 font-semibold sm:ml-auto"
+            aria-pressed={settings.maintenanceActive}
+          >
+            {maintenanceBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : settings.maintenanceActive ? (
+              <Power className="h-4 w-4" aria-hidden />
+            ) : (
+              <Wrench className="h-4 w-4" aria-hidden />
+            )}
+            {settings.maintenanceActive ? "Désactiver la maintenance" : "Activer la maintenance"}
+          </Button>
         </CardContent>
       </Card>
 

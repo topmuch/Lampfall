@@ -320,6 +320,8 @@ export interface Settings {
   rc: string;
   ninea: string;
   logo?: string | null;
+  maintenanceActive?: boolean;
+  maintenanceSince?: string | null;
   updatedAt?: string;
 }
 

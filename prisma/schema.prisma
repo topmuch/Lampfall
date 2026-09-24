@@ -279,6 +279,10 @@ model Setting {
   rc          String  @default("")
   ninea       String  @default("")
   logo        String? // data-URL du logo personnalisé
+  // Mode maintenance (activable depuis Paramètres) :
+  // les employés voient un écran « Maintenance en cours » avec logo + compteur.
+  maintenanceActive Boolean   @default(false)
+  maintenanceSince  DateTime? // début de la maintenance (base du compteur jours/mois/années)
   updatedAt   DateTime @updatedAt
 }
 
