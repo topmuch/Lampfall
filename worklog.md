@@ -680,3 +680,32 @@ Stage Summary:
 - La création de factures/commandes ne peut plus échouer par collision de numéro, même après suppressions ou créations simultanées
 - Les numéros existants ne sont PAS renumérotés ; les trous éventuels restent simplement des trous
 - Push effectué ; l'utilisateur doit Redeployer sur Coolify (le Dockerfile en mode collé récupère le dernier main via le fallback clone)
+
+---
+Task ID: sync-github-credit-pdf
+Agent: Z.ai Code (main)
+Task: Synchroniser GitHub ↔ local + factures Commerçant/Immo téléchargeables/imprimables immédiatement
+
+Work Log:
+- Analysé la divergence git : commit local 6b060cd et commit distant 5fa5a3d = MÊME contenu (seul .zscripts/dev.pid, fichier interne sandbox, différait) → reset --hard sur origin/main
+- Branche distante immo-lampfall-line vérifiée : identique à main (aucun diff) — créée côté GitHub, rien à fusionner
+- GitHub = local = 5fa5a3d avant travaux
+- Base sandbox à nouveau effacée par resync (dossier db/ gitignore) → restauration immédiate depuis backup/lampfall-db-20260924.db (versionnée dans git) + db push + seed admin
+- Factures à crédit (credit-purchases-view.tsx) :
+  - Bouton Télécharger PDF désormais présent sur TOUTES les lignes (avant : uniquement si facture PAYÉE) + nouveau bouton Imprimer (A4) par ligne (printInvoiceA4 → boîte de dialogue impression navigateur)
+  - handleSavedAndDownload : après une CRÉATION depuis l'onglet Commerçant ou Immo, le PDF de la nouvelle facture est téléchargé automatiquement (toast « PDF téléchargé automatiquement ») ; en édition, pas de re-téléchargement forcé
+- invoice-editor.tsx : signature onSaved étendue à (invoice?: Invoice) — le parent reçoit la facture créée (rétrocompatible, autres appelants inchangés)
+- Tests navigateur réels (admin) :
+  - Commerçant : création FV-2026-0008 (2×7 500 + TVA 18 % = 17 700) → toast auto-download ✓, ligne NON PAYÉE avec boutons crayon/versements/imprimer/télécharger/poubelle ✓, clic Télécharger → toast « Facture téléchargée » ✓
+  - Immo : création FV-2026-0009 (3×12 500) → auto-download ✓ + mêmes boutons ✓
+  - 3 PDF réellement présents dans ~/Downloads ; contenu vérifié PyMuPDF (numéro, client, articles, Total HT 37 500 + TVA 6 750 = TTC 44 250, montant en lettres)
+  - Impression : aucun problème signalé par printPDF (pas de boîte de dialogue en headless, flux sans exception)
+  - Mobile 390 px : scrollWidth 390 (aucun débordement), navigation drawer OK
+  - Lint 0 erreur ; dev.log 0 erreur
+- Nettoyage complet des données de test : 2 factures supprimées via API (le DELETE restaure le stock et supprime le creditPurchase lié) → retour à 11 factures, 0 achat à crédit, stocks intacts
+- Commit 718d932 poussé vers origin/main ; PDFs de test supprimés ; fetch vérifié (main = origin/main)
+
+Stage Summary:
+- Dans Commerçant et Immo, chaque facture (payée ou non) est immédiatement téléchargeable ET imprimable : PDF auto-téléchargé dès la création + boutons Imprimer (A4) / Télécharger sur chaque ligne
+- GitHub = local = 718d932 ; la branche immo-lampfall-line reste identique à main
+- Le déploiement Coolify récupérera tout (P2002 + cette fonctionnalité) au prochain Redeploy
