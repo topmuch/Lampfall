@@ -58,3 +58,6 @@ server.log
 /download/
 /upload/
 tool-results/
+
+# Fichiers internes du sandbox (PID du serveur dev, etc.)
+.zscripts/
