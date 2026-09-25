@@ -709,3 +709,21 @@ Stage Summary:
 - Dans Commerçant et Immo, chaque facture (payée ou non) est immédiatement téléchargeable ET imprimable : PDF auto-téléchargé dès la création + boutons Imprimer (A4) / Télécharger sur chaque ligne
 - GitHub = local = 718d932 ; la branche immo-lampfall-line reste identique à main
 - Le déploiement Coolify récupérera tout (P2002 + cette fonctionnalité) au prochain Redeploy
+
+---
+Task ID: sync-local-github-3
+Agent: Z.ai Code (main)
+Task: Synchroniser la version locale et la version GitHub
+
+Work Log:
+- Comparé local ↔ origin/main : même commit (1b0f1d5), aucun commit en attente des deux côtés — seuls faux écarts : .zscripts/dev.pid (PID du serveur dev, fichier interne sandbox modifié à chaque redémarrage)
+- Constaté un nouveau resync sandbox : base db/custom.db effacée + serveur arrêté → restauration immédiate depuis backup/lampfall-db-20260924.db (versionnée dans git) + db push + seed admin
+- Serveur relancé (setsid) → HTTP 200 ; données vérifiées : 24 produits, 11 factures, 6 clients, 1 admin
+- Housekeeping : .zscripts/ ajouté au .gitignore + git rm --cached → plus jamais de faux écart local/GitHub dû au fichier PID
+- Commit 4e2b84d poussé vers origin/main (vérifié fetch : 0 ahead / 0 behind, working tree propre)
+- Vérification navigateur : page de connexion rendue correctement, aucune erreur
+
+Stage Summary:
+- GitHub = local = 4e2b84d, synchronisation parfaite et stable (le fichier interne .zscripts ne polluera plus l'état git)
+- Aperçu local opérationnel après resync (restauration automatique depuis la base de référence embarquée dans git)
+- Rappel déploiement : Coolify doit être Redeploy pour récupérer P2002 + factures crédit PDF (déjà sur GitHub)
