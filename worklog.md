@@ -727,3 +727,23 @@ Stage Summary:
 - GitHub = local = 4e2b84d, synchronisation parfaite et stable (le fichier interne .zscripts ne polluera plus l'état git)
 - Aperçu local opérationnel après resync (restauration automatique depuis la base de référence embarquée dans git)
 - Rappel déploiement : Coolify doit être Redeploy pour récupérer P2002 + factures crédit PDF (déjà sur GitHub)
+
+---
+Task ID: fix-convert-proforma
+Agent: Z.ai Code (main)
+Task: « Dans Facture, impossible de convertir en facture de vente — ça marche pas »
+
+Work Log:
+- Reproduit le diagnostic : le bouton « Convertir en facture » existe bien dans l'onglet Proforma ; l'échec vient de l'API POST /api/invoices/[id]/convert
+- Cause racine : la route convert utilisait ENCORE l'ancienne numérotation count+1 (le bug P2002 corrigé précédemment dans POST /api/invoices et POST /api/orders avait échappé ici) → dès qu'une facture VENTE a été supprimée (trou dans la numérotation), le numéro généré entre en collision avec un existant → Unique constraint (number) → « Erreur serveur »
+- Corrigé convert/route.ts : generateDocumentNumber (MAX existant + 1) + withNumberRetry (5 tentatives en cas de création concurrente)
+- Balayé toutes les routes restantes : /api/purchases utilisait aussi count+1 comme numéro de secours → aligné sur generateDocumentNumber (achat non unique, pas de retry nécessaire) ; numbering.ts étendu au modèle purchase
+- Preuve par le scénario réel (piège reproduit à l'identique du déploiement utilisateur) : création FV-2026-0008 + FV-2026-0009, suppression de 0009 et de la facture du milieu 0005 → COUNT=7, MAX=0008 → l'ancien code générait 0008 (déjà pris → P2002), le nouveau génère 0009
+- Test navigateur complet : login admin → onglet Proforma → menu PF-2026-0004 → « Convertir en facture » → confirmation → toast « Proforma converti — Facture de vente FV-2026-0009 créée » (3 articles catalogue, stock décrémenté)
+- Nettoyage : factures de test supprimées (le DELETE restaure le stock), trace de conversion retirée de PF-2026-0004, base intégralement restaurée depuis backup/lampfall-db-20260924.db (11 factures FV-0001→0007 + 4 PF, 24 produits, Ampoule 150) → état de référence strict
+- Lint 0 erreur ; commit e1fb33b poussé vers origin/main
+
+Stage Summary:
+- La conversion Proforma → Facture de vente fonctionne à nouveau, y compris (surtout) quand des factures ont été supprimées : plus aucune collision de numéro possible
+- Trois flux de numérotation désormais sécurisés : création facture, commande, conversion proforma (+ secours achats aligné)
+- GitHub = local = e1fb33b ; Redeploy Coolify nécessaire pour appliquer le correctif
