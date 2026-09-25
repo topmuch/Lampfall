@@ -747,3 +747,28 @@ Stage Summary:
 - La conversion Proforma → Facture de vente fonctionne à nouveau, y compris (surtout) quand des factures ont été supprimées : plus aucune collision de numéro possible
 - Trois flux de numérotation désormais sécurisés : création facture, commande, conversion proforma (+ secours achats aligné)
 - GitHub = local = e1fb33b ; Redeploy Coolify nécessaire pour appliquer le correctif
+
+---
+Task ID: audit-complet
+Agent: Z.ai Code (main)
+Task: Audit complet — liens, génération factures/bons de livraison, boutons
+
+Work Log:
+- API (curl) : 16 collections GET testées (clients, products, categories, invoices, orders, purchases, credit-purchases, tenants, users, audit, settings, dashboard, reports/sales, stock-movements, suppliers) → toutes 200 ; CRUD complet round-trip sur chaque ressource → OK
+- Validations vérifiées volontairement : catégorie inexistante refusée, versement sur facture déjà payée refusé (reste 0), montant > reste refusé — comportements corrects
+- Flux métier testés de bout en bout : facture VENTE avec décrément stock, PUT livré+payé, proforma → conversion (FV-2026-0009), commande → conversion (FV-2026-0010), achat fournisseur FA-2026-0004, credit-purchase + versement partiel (3000/11800), tenant + loyer, catégorie, utilisateur, PUT settings
+- UI navigateur (agent-browser) :
+  - Connexion admin, dashboard (KPIs, graphique, navigation année), tous les onglets visités : Factures, Proforma, Commandes, Clients, Commerçant, Immo, Achats, Fournisseurs, Produits, Mouvements, Utilisateurs, Audit, Paramètres — tous rendent
+  - Menus d'actions complets : facture VENTE (9 items : Voir/Télécharger/Imprimer PDF, Modifier, Paiements, Envoyer par…, Bon de livraison, Transférer crédit, Supprimer), proforma (+ Convertir), commande (Voir bon/Modifier/Convertir/Supprimer), client (Historique/Modifier/Supprimer)
+  - PDF téléchargés et vérifiés PyMuPDF : Facture FV-2026-0001 (en-tête société, RC, totaux), Proforma, Liste des commandes, Historique client (Promoteur Keur Dansa + documents), Rapport du jour, Rapport de ventes, Bon réappro stock
+  - Bon de livraison + bon de commande : ouverture correcte dans onglet blob (visualiseur navigateur)
+  - Dialogs : Versements (totaux + historique + formulaire, refus versement sur payée), Ticket 80 mm (reçu complet : société, RC, montant, mode Wave, bouton Imprimer), Envoyer la facture (WhatsApp/Email/Copier/PDF, message pré-rempli)
+  - Produits : 25 réf, valeur stock, boutons Réappro (PDF)/Catégories/Importer/Nouveau produit
+  - Mobile 390 px : scrollWidth 390 partout (aucun débordement), drawer complet avec toutes les sections, navigation fonctionnelle ; footer naturellement poussé sur page longue
+  - Console : aucune erreur bloquante (seuls logs bénins React/HMR) ; dev.log : 0 erreur
+- Nettoyage : base intégralement restaurée depuis backup/lampfall-db-20260924.db (11 factures, 6 clients, 24 produits, 0 crédit, 3 achats, 3 commandes, 4 locataires, admin, RC vide) — état de référence strict
+- Aucun correctif code nécessaire : le correctif conversion de la veille couvrait le seul bug connu ; rien à pousser (worklog uniquement)
+
+Stage Summary:
+- AUDIT GLOBAL : RAS — toutes les fonctionnalités testées fonctionnent (liens, boutons, génération PDF facture/proforma/bon de livraison/bon de commande/rapports/quittance ticket/historique, conversions, versements, CRUD, validations, responsive)
+- Application vérifiée de bout en bout sur les données de référence, prête pour Redeploy Coolify
