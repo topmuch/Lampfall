@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
-import { nextNumber, NUMBER_PREFIXES } from "@/lib/constants";
+import { NUMBER_PREFIXES } from "@/lib/constants";
+import { generateDocumentNumber } from "@/lib/numbering";
 import { logAudit } from "@/lib/audit";
 import { getAuthUser } from "@/lib/auth";
 
@@ -98,12 +99,11 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const year = new Date().getFullYear();
-    const count = await db.purchase.count({
-      where: { number: { startsWith: `FA-${year}-` } },
-    });
+    // Numérotation de secours basée sur le MAXIMUM existant (pas de collision
+    // après suppression) — le numéro saisi manuellement reste prioritaire.
     const number =
-      formData.get("number")?.toString().trim() || nextNumber(NUMBER_PREFIXES.ACHAT, count, year);
+      formData.get("number")?.toString().trim() ||
+      (await generateDocumentNumber("purchase", NUMBER_PREFIXES.ACHAT));
 
     const user = await getAuthUser(request);
     const userName = user?.name ?? null;

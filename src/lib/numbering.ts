@@ -8,12 +8,21 @@
 // puis la route réessaie automatiquement en cas de collision concurrente.
 import { db } from "@/lib/db";
 
-type NumberedTable = "invoice" | "order";
+type NumberedTable = "invoice" | "order" | "purchase";
 
 async function maxSequenceFor(table: NumberedTable, like: string): Promise<number> {
   let max = 0;
   if (table === "invoice") {
     const rows = await db.invoice.findMany({
+      where: { number: { startsWith: like } },
+      select: { number: true },
+    });
+    for (const r of rows) {
+      const n = parseInt(r.number.slice(like.length), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  } else if (table === "purchase") {
+    const rows = await db.purchase.findMany({
       where: { number: { startsWith: like } },
       select: { number: true },
     });
