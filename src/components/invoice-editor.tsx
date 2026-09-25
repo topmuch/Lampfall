@@ -50,7 +50,8 @@ type Destination = "NONE" | "COMMERCANT" | "IMMO";
 interface InvoiceEditorProps {
   open: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  /** Appelé après enregistrement avec la facture créée/modifiée (undefined en cas d'échec du transfert). */
+  onSaved: (invoice?: Invoice) => void;
   type: "VENTE" | "PROFORMA";
   invoice: Invoice | null; // null = création
   clients: Client[];
@@ -597,7 +598,7 @@ export function InvoiceEditor({
             : ""
         }`,
       });
-      onSaved();
+      onSaved(json as Invoice);
       onClose();
     } catch (e) {
       toast({

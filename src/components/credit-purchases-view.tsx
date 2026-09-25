@@ -8,6 +8,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Printer,
   Receipt,
   Store,
   Trash2,
@@ -50,7 +51,7 @@ import { Search } from "lucide-react";
 import { PaymentBadge, DeliveryBadge } from "@/components/status-badges";
 import { TicketPreviewDialog } from "@/components/ticket-preview-dialog";
 import { InvoiceEditor } from "@/components/invoice-editor";
-import { saveOrOpenInvoicePDF } from "@/lib/pdf";
+import { printInvoiceA4, saveOrOpenInvoicePDF } from "@/lib/pdf";
 import type { Client, CreditPayment, CreditPurchase, Invoice, Product } from "@/lib/types";
 
 function todayISO(): string {
@@ -454,7 +455,7 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
     }
   };
 
-  /** Télécharge la facture PDF d'origine une fois l'achat à crédit payé. */
+  /** Télécharge la facture PDF d'origine — disponible à tout moment (payée ou non). */
   const downloadInvoicePDF = async (p: CreditPurchase) => {
     setDownloadingId(p.id);
     try {
@@ -474,6 +475,45 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
       });
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  /** Imprime la facture PDF d'origine (boîte de dialogue impression A4). */
+  const printInvoicePDF = async (p: CreditPurchase) => {
+    setDownloadingId(p.id);
+    try {
+      const res = await authFetch(`/api/invoices/${p.sourceId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Facture introuvable");
+      await printInvoiceA4(json as Invoice);
+    } catch (e) {
+      toast({
+        title: "Erreur impression",
+        description: e instanceof Error ? e.message : "Impression de la facture impossible",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  /** Après création depuis cet onglet : le PDF de la nouvelle facture est téléchargé immédiatement. */
+  const handleSavedAndDownload = async (inv?: Invoice) => {
+    refetch();
+    if (inv && !editingSource) {
+      try {
+        await saveOrOpenInvoicePDF(inv, "download");
+        toast({
+          title: "PDF téléchargé automatiquement",
+          description: `Le PDF de ${inv.number} est prêt — disponible aussi via les boutons Télécharger / Imprimer de la liste.`,
+        });
+      } catch {
+        toast({
+          title: "PDF non téléchargé",
+          description: `La facture ${inv.number} est enregistrée — utilisez le bouton Télécharger de la liste.`,
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -693,23 +733,36 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
                             >
                               <Wallet className="h-4 w-4" />
                             </Button>
-                            {statusOf(p) === "PAYE" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-green-700 hover:text-green-800"
-                                onClick={() => downloadInvoicePDF(p)}
-                                disabled={downloadingId === p.id}
-                                aria-label={`Télécharger la facture PDF de ${p.number}`}
-                                title="Facture payée — télécharger le PDF"
-                              >
-                                {downloadingId === p.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                                ) : (
-                                  <Download className="h-4 w-4" aria-hidden />
-                                )}
-                              </Button>
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => printInvoicePDF(p)}
+                              disabled={downloadingId === p.id}
+                              aria-label={`Imprimer la facture ${p.number}`}
+                              title="Imprimer (A4)"
+                            >
+                              {downloadingId === p.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              ) : (
+                                <Printer className="h-4 w-4" aria-hidden />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-700 hover:text-green-800"
+                              onClick={() => downloadInvoicePDF(p)}
+                              disabled={downloadingId === p.id}
+                              aria-label={`Télécharger le PDF de ${p.number}`}
+                              title="Télécharger le PDF"
+                            >
+                              {downloadingId === p.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              ) : (
+                                <Download className="h-4 w-4" aria-hidden />
+                              )}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -736,7 +789,7 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
       <InvoiceEditor
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
-        onSaved={() => refetch()}
+        onSaved={handleSavedAndDownload}
         type={editingSource?.type === "PROFORMA" ? "PROFORMA" : "VENTE"}
         invoice={editingSource}
         clients={clients ?? []}
