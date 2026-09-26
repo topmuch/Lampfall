@@ -832,3 +832,19 @@ Stage Summary:
 - Nouvelle UX de création des factures : catalogue cliquable + panier à steppers, visibles simultanément sur desktop, 2 onglets sur mobile — plus de combobox ni de tableau à remplir
 - Fichiers : src/components/product-catalog.tsx (nouveau), src/components/cart-lines.tsx (nouveau), src/components/invoice-editor.tsx (réécrit), src/components/purchases-view.tsx (formulaire remplacé)
 - ItemsEditor conservé pour les commandes (orders-view) ; logique d'enregistrement/crédit inchangée
+
+---
+Task ID: restore-old-invoice-editor
+Agent: Z.ai Code (main)
+Task: Restaurer l'ancienne version de la page de création des factures (demande client : « restaurer l'ancien version de la facturation qui etait la »)
+
+Work Log:
+- Restauré src/components/invoice-editor.tsx et src/components/purchases-view.tsx depuis le commit addc2c8 (version plein écran : recherche produit en liste déroulante + tableau d'articles + bouton « + Ajouter une ligne »)
+- Supprimé les composants du design caisse devenus inutilisés : product-catalog.tsx et cart-lines.tsx
+- Lint OK ; test agent-browser : ouverture facture vente (ancien rendu confirmé par capture), ajout produit via combobox (« Ampoule LED E27 9W »), client saisi, FV-2026-0008 créée et vérifiée via API ; ancien formulaire fournisseur confirmé
+- Base restaurée depuis backup/lampfall-db-20260924.db (11 factures, 24 produits, Ampoule=150), serveur relancé (HTTP 200)
+
+Stage Summary:
+- L'UI de création des factures/factures d'achat est revenue à l'état addc2c8 (modales → pages conservées, multi-lignes « + » conservées, PDF harmonisés conservés)
+- Seul le design « caisse » (catalogue cliquable + panier steppers) a été retiré ; aucune autre fonctionnalité affectée
+- Commands testées et fonctionnelles après restauration

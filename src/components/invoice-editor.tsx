@@ -1,35 +1,14 @@
 "use client";
 
-/**
- * InvoiceEditor — NOUVEAU DESIGN « CAISSE » (POS) en page plein écran.
- *
- * Principe (plus facile) :
- *  - GAUCHE : catalogue visible — cartes produits cliquables, recherche
- *    instantanée, filtres par catégorie. Un clic ajoute au panier.
- *  - DROITE : la facture — panier avec compteurs − / +, client,
- *    paiement, classement crédit, notes. Totaux toujours visibles.
- *  - MOBILE : deux onglets « Catalogue » / « Facture (n) ».
- *
- * Utilisé par : facture de vente, facture proforma, factures à crédit
- * Commerçant et Immo (classement verrouillé via presetDestination).
- */
-
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  BadgeCheck,
   Building2,
   CheckCircle2,
-  Coins,
   CreditCard,
-  Hourglass,
-  LayoutGrid,
   Loader2,
-  PackagePlus,
-  PenLine,
   Plus,
   Save,
-  ShoppingCart,
   Store,
   UserPlus,
 } from "lucide-react";
@@ -52,9 +31,12 @@ import { useToast } from "@/hooks/use-toast";
 import { CATEGORY_LABELS, formatMoney, PRODUCT_CATEGORIES, toISODate } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Client, Invoice, Product } from "@/lib/types";
-import { DraftItem, itemToApi, emptyItem } from "@/components/items-editor";
-import { ProductCatalog } from "@/components/product-catalog";
-import { CartLines } from "@/components/cart-lines";
+import {
+  DraftItem,
+  ItemsEditor,
+  emptyItem,
+  itemToApi,
+} from "@/components/items-editor";
 
 type Destination = "NONE" | "COMMERCANT" | "IMMO";
 
@@ -133,7 +115,7 @@ function fromInvoice(invoice: Invoice): FormState {
   };
 }
 
-/* ─── Page de création rapide de client ─────────────────────────────────── */
+/* ─── Dialogue de création rapide de client ─────────────────────────────── */
 
 function QuickClientDialog({
   open,
@@ -263,7 +245,7 @@ function QuickClientDialog({
   );
 }
 
-/* ─── Page de création rapide de produit ────────────────────────────────── */
+/* ─── Dialogue de création rapide de produit ────────────────────────────── */
 
 function QuickProductDialog({
   open,
@@ -368,7 +350,7 @@ function QuickProductDialog({
       onClose={() => onOpenChange(false)}
       title={
         <span className="flex items-center gap-2">
-          <PackagePlus className="h-4 w-4 text-primary" aria-hidden /> Nouveau produit
+          <Plus className="h-4 w-4 text-primary" aria-hidden /> Nouveau produit
         </span>
       }
       description="Le produit sera ajouté au catalogue et inséré dans cette facture."
@@ -452,18 +434,14 @@ function QuickProductDialog({
   );
 }
 
-/* ─── Éditeur principal — design caisse ─────────────────────────────────── */
+/* ─── Éditeur principal ─────────────────────────────────────────────────── */
 
-/** Ligne d'article entièrement vide et encore intacte (à remplacer au 1er ajout). */
-function isUntouchedLine(it: DraftItem): boolean {
-  return (
-    !it.productId &&
-    !it.productName.trim() &&
-    (Number(it.quantity) || 0) <= 1 &&
-    (Number(it.unitPrice) || 0) === 0
-  );
-}
-
+/**
+ * Éditeur de facture / proforma en PAGE PLEIN ÉCRAN — mise en page COMPACTE
+ * 2 colonnes : articles + totaux à gauche, client/paramètres/crédit à droite.
+ * Recherche de produits, création rapide de client et de produit intégrées.
+ * Propose le classement en achat à crédit (Commerçant ou Immo) dès la création.
+ */
 export function InvoiceEditor({
   open,
   onClose,
@@ -481,9 +459,6 @@ export function InvoiceEditor({
   const isEdit = invoice !== null;
   const isProforma = type === "PROFORMA";
 
-  // Onglet mobile : catalogue ou facture
-  const [mobileTab, setMobileTab] = useState<"catalog" | "facture">("catalog");
-
   // Listes locales (enrichies par les créations rapides)
   const [localClients, setLocalClients] = useState<Client[]>(clients);
   const [localProducts, setLocalProducts] = useState<Product[]>(products);
@@ -496,7 +471,7 @@ export function InvoiceEditor({
   const [creditDueDate, setCreditDueDate] = useState("");
   const [creditNote, setCreditNote] = useState("");
 
-  // Pages de création rapide
+  // Dialogues de création rapide
   const [clientDialog, setClientDialog] = useState(false);
   const [productDialog, setProductDialog] = useState(false);
   const [productPreset, setProductPreset] = useState("");
@@ -508,7 +483,6 @@ export function InvoiceEditor({
       setCreditTier("");
       setCreditDueDate("");
       setCreditNote("");
-      setMobileTab("catalog");
     }
   }, [open, invoice, presetDestination]);
 
@@ -523,11 +497,6 @@ export function InvoiceEditor({
     const ttc = Math.round(ht * (1 + rate / 100));
     return { ht, tva: ttc - ht, ttc };
   }, [form.items, form.taxRate]);
-
-  const itemCount = useMemo(
-    () => form.items.filter((it) => it.productName.trim() || (Number(it.quantity) || 0) > 0).length,
-    [form.items]
-  );
 
   const onClientChange = (clientId: string) => {
     if (!clientId) {
@@ -544,28 +513,6 @@ export function InvoiceEditor({
     });
   };
 
-  /* Ajout depuis le catalogue : incrémente si déjà présent, sinon nouvelle ligne */
-  const pickProduct = (product: Product) => {
-    const base = form.items.filter((it) => !isUntouchedLine(it));
-    const existing = base.findIndex((it) => it.productId === product.id);
-    if (existing >= 0) {
-      base[existing] = {
-        ...base[existing],
-        quantity: String((Number(base[existing].quantity) || 0) + 1),
-      };
-    } else {
-      base.push({
-        productId: product.id,
-        productName: product.name,
-        category: product.category,
-        unit: product.unit,
-        quantity: "1",
-        unitPrice: String(product.salePrice),
-      });
-    }
-    set({ items: base });
-  };
-
   const submit = async () => {
     const items = form.items.filter(
       (it) => it.productName.trim() && (Number(it.quantity) || 0) > 0
@@ -573,7 +520,7 @@ export function InvoiceEditor({
     if (items.length === 0) {
       toast({
         title: "Articles manquants",
-        description: "Touchez un produit du catalogue pour l'ajouter à la facture.",
+        description: "Ajoutez au moins un article avec un nom et une quantité.",
         variant: "destructive",
       });
       return;
@@ -681,25 +628,12 @@ export function InvoiceEditor({
 
   const docLabel = isProforma ? "proforma" : "facture";
 
-  const paymentOptions = [
-    { value: "NON_PAYE" as const, label: "Non payé", icon: Hourglass },
-    { value: "PARTIEL" as const, label: "Partiel", icon: Coins },
-    { value: "PAYE" as const, label: "Payé", icon: BadgeCheck },
-  ];
-
-  const reste = Math.max(0, totals.ttc - (Number(form.amountPaid) || 0));
-
   return (
-    <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-background"
-      role="dialog"
-      aria-modal="true"
-      aria-label={isEdit ? `Modifier le ${docLabel} ${invoice!.number}` : `Nouveau ${docLabel}`}
-    >
-      {/* ─── Barre supérieure collante ─── */}
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
-          <div className="flex min-w-0 items-center gap-2.5">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-background" role="dialog" aria-modal="true" aria-label={isEdit ? `Modifier le ${docLabel} ${invoice!.number}` : `Nouveau ${docLabel}`}>
+      {/* Barre supérieure collante */}
+      <header className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="outline"
               size="icon"
@@ -710,7 +644,7 @@ export function InvoiceEditor({
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-bold sm:text-lg">
+              <h1 className="truncate text-base font-bold sm:text-lg">
                 {isEdit
                   ? `Modifier ${isProforma ? "le proforma" : "la facture"} ${invoice!.number}`
                   : presetDestination
@@ -720,19 +654,20 @@ export function InvoiceEditor({
                       : "Nouvelle facture de vente"}
               </h1>
               <p className="hidden text-xs text-muted-foreground sm:block">
-                {itemCount} article{itemCount > 1 ? "s" : ""}
-                {isProforma ? " — devis prévisionnel, convertissable en facture" : " — touchez un produit pour l'ajouter"}
+                {isProforma
+                  ? "Devis prévisionnel — convertissable en facture définitive."
+                  : "Articles, client, paiement et classement crédit."}
               </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5">
-              <span className="hidden text-xs text-muted-foreground sm:inline">Total TTC</span>
-              <span className="text-sm font-bold tabular-nums text-primary sm:text-base">
+            <div className="hidden items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 md:flex">
+              <span className="text-xs text-muted-foreground">Total TTC</span>
+              <span className="text-sm font-bold tabular-nums text-primary">
                 {formatMoney(totals.ttc)}
               </span>
             </div>
-            <Button onClick={submit} disabled={saving} className="min-w-28 sm:min-w-32">
+            <Button onClick={submit} disabled={saving} className="min-w-32">
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               ) : (
@@ -744,85 +679,67 @@ export function InvoiceEditor({
         </div>
       </header>
 
-      {/* ─── Onglets mobiles : Catalogue / Facture ─── */}
-      <div className="sticky top-[57px] z-10 border-b bg-background px-3 py-2 lg:hidden">
-        <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="Vue mobile">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mobileTab === "catalog"}
-            onClick={() => setMobileTab("catalog")}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-all",
-              mobileTab === "catalog" ? "bg-background shadow-sm" : "text-muted-foreground"
-            )}
-          >
-            <LayoutGrid className="h-4 w-4" aria-hidden />
-            Catalogue
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mobileTab === "facture"}
-            onClick={() => setMobileTab("facture")}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-all",
-              mobileTab === "facture" ? "bg-background shadow-sm" : "text-muted-foreground"
-            )}
-          >
-            <ShoppingCart className="h-4 w-4" aria-hidden />
-            Facture
-            <span
-              className={cn(
-                "ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold",
-                itemCount > 0 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-              )}
-            >
-              {itemCount}
-            </span>
-          </button>
-        </div>
-      </div>
+      {/* ─── Contenu compact : 2 colonnes ─── */}
+      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 pb-12 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        {/* Colonne principale : articles + totaux */}
+        <Card className="self-start">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Articles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ItemsEditor
+              items={form.items}
+              onChange={(items) => set({ items })}
+              products={localProducts}
+              priceField="salePrice"
+              onCreateProduct={(term) => {
+                setProductPreset(term);
+                setProductDialog(true);
+              }}
+            />
 
-      {/* ─── Contenu : catalogue + facture ─── */}
-      <div className="mx-auto grid max-w-7xl gap-4 px-3 py-4 pb-16 sm:px-4 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_440px]">
-        {/* Colonne catalogue (visible : onglet Catalogue sur mobile) */}
-      <section
-          className={cn("min-w-0", mobileTab !== "catalog" && "hidden lg:block")}
-          aria-label="Catalogue de produits"
-        >
-          <Card className="flex flex-col overflow-hidden lg:sticky lg:top-[68px] lg:h-[calc(100vh-88px)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <LayoutGrid className="h-4 w-4 text-primary" aria-hidden />
-                Catalogue
-                <span className="text-xs font-normal text-muted-foreground">
-                  — touchez un produit pour l&apos;ajouter
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 pb-3">
-              <ProductCatalog
-                products={localProducts}
-                priceField="salePrice"
-                onPick={pickProduct}
-                onCreateProduct={(term) => {
-                  setProductPreset(term);
-                  setProductDialog(true);
-                }}
-              />
-            </CardContent>
-          </Card>
-        </section>
+            {/* Totaux intégrés (une seule ligne compacte) */}
+            <Separator className="my-4" />
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+              <div>
+                <span className="text-xs text-muted-foreground">Total HT</span>
+                <p className="font-semibold tabular-nums">{formatMoney(totals.ht)}</p>
+              </div>
+              <div className="flex items-end gap-1.5">
+                <div className="w-20">
+                  <Label htmlFor="inv-tva" className="text-xs text-muted-foreground">
+                    TVA (%)
+                  </Label>
+                  <Input
+                    id="inv-tva"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.taxRate}
+                    onChange={(e) => set({ taxRate: e.target.value })}
+                    className="h-8"
+                  />
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Montant TVA</span>
+                  <p className="text-sm font-semibold tabular-nums">{formatMoney(totals.tva)}</p>
+                </div>
+              </div>
+              <div className="ml-auto text-right">
+                <span className="text-xs text-muted-foreground">Total TTC</span>
+                <p className="text-lg font-bold tabular-nums text-primary">
+                  {formatMoney(totals.ttc)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Colonne facture (visible : onglet Facture sur mobile) */}
-        <section
-          className={cn("min-w-0 space-y-3", mobileTab !== "facture" && "hidden lg:block")}
-          aria-label="Facture"
-        >
+        {/* Colonne latérale : client, paramètres, crédit, notes */}
+        <div className="space-y-4">
           {/* Client */}
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between text-base">
                 Client
                 <Button
@@ -837,33 +754,31 @@ export function InvoiceEditor({
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Client enregistré</Label>
-                  <Select value={form.clientId} onValueChange={onClientChange}>
-                    <SelectTrigger aria-label="Choisir un client existant">
-                      <SelectValue placeholder="— Client libre / comptoir —" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      {localClients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="inv-name">Nom du client</Label>
-                  <Input
-                    id="inv-name"
-                    value={form.clientName}
-                    onChange={(e) => set({ clientName: e.target.value, clientId: "" })}
-                    placeholder="Ex : M. Abdoulaye Diop"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label>Client existant</Label>
+                <Select value={form.clientId} onValueChange={onClientChange}>
+                  <SelectTrigger aria-label="Choisir un client existant">
+                    <SelectValue placeholder="— Client libre / comptoir —" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {localClients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-name">Nom du client</Label>
+                <Input
+                  id="inv-name"
+                  value={form.clientName}
+                  onChange={(e) => set({ clientName: e.target.value, clientId: "" })}
+                  placeholder="Ex : M. Abdoulaye Diop"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="inv-phone">Téléphone</Label>
                   <Input
@@ -886,171 +801,10 @@ export function InvoiceEditor({
             </CardContent>
           </Card>
 
-          {/* Panier */}
+          {/* Paramètres du document */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span className="flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4 text-primary" aria-hidden />
-                  Articles ({itemCount})
-                </span>
-                <div className="flex gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1"
-                    onClick={() => set({ items: [...form.items, emptyItem()] })}
-                    aria-label="Ajouter un article libre"
-                  >
-                    <PenLine className="h-3.5 w-3.5" aria-hidden /> Libre
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1"
-                    onClick={() => {
-                      setProductPreset("");
-                      setProductDialog(true);
-                    }}
-                    aria-label="Créer un produit"
-                  >
-                    <PackagePlus className="h-3.5 w-3.5" aria-hidden /> Produit
-                  </Button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CartLines items={form.items} onChange={(items) => set({ items })} />
-
-              {/* Totaux */}
-              <Separator className="my-3" />
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Total HT</span>
-                  <span className="font-semibold tabular-nums">{formatMoney(totals.ht)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex items-center gap-2 text-muted-foreground">
-                    TVA
-                    <span className="flex items-center gap-1">
-                      {[0, 18].map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => set({ taxRate: String(r) })}
-                          aria-label={`TVA ${r} pour cent`}
-                          className={cn(
-                            "rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors",
-                            Number(form.taxRate) === r
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:bg-accent"
-                          )}
-                        >
-                          {r}%
-                        </button>
-                      ))}
-                    </span>
-                    <Input
-                      id="inv-tva"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={form.taxRate}
-                      onChange={(e) => set({ taxRate: e.target.value })}
-                      aria-label="Taux de TVA personnalisé"
-                      className="h-7 w-14"
-                    />
-                    <span>%</span>
-                  </span>
-                  <span className="font-semibold tabular-nums">{formatMoney(totals.tva)}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-primary/5 px-3 py-2">
-                  <span className="text-sm font-bold">Total TTC</span>
-                  <span className="text-lg font-bold tabular-nums text-primary">
-                    {formatMoney(totals.ttc)}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Paiement */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Paiement</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div
-                className="grid grid-cols-3 gap-1.5"
-                role="radiogroup"
-                aria-label="Statut de paiement"
-              >
-                {paymentOptions.map((opt) => {
-                  const Icon = opt.icon;
-                  const active = form.paymentStatus === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => set({ paymentStatus: opt.value })}
-                      className={cn(
-                        "flex flex-col items-center gap-1 rounded-xl border p-2.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        active
-                          ? "border-primary bg-primary/10 text-primary ring-1 ring-primary"
-                          : "text-muted-foreground hover:bg-accent"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" aria-hidden />
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {form.paymentStatus === "PARTIEL" && (
-                <div className="grid gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="inv-paid">Montant payé (FCFA)</Label>
-                    <Input
-                      id="inv-paid"
-                      type="number"
-                      min="0"
-                      value={form.amountPaid}
-                      onChange={(e) => set({ amountPaid: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Reste à payer : </span>
-                      <span className="font-bold tabular-nums text-gold">{formatMoney(reste)}</span>
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {type === "VENTE" && !isEdit && (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="inv-stock"
-                    checked={form.updateStock}
-                    onCheckedChange={(v) => set({ updateStock: v === true })}
-                  />
-                  <Label htmlFor="inv-stock" className="font-normal text-sm">
-                    Décrémenter le stock
-                  </Label>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Options : dates + livraison */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Dates &amp; livraison</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Paramètres</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -1071,7 +825,7 @@ export function InvoiceEditor({
                   onChange={(e) => set({ dueDate: e.target.value })}
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5">
                 <Label>Livraison</Label>
                 <Select
                   value={form.deliveryStatus}
@@ -1086,13 +840,53 @@ export function InvoiceEditor({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label>Paiement</Label>
+                <Select
+                  value={form.paymentStatus}
+                  onValueChange={(v) => set({ paymentStatus: v as FormState["paymentStatus"] })}
+                >
+                  <SelectTrigger aria-label="Statut de paiement">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NON_PAYE">Non payé</SelectItem>
+                    <SelectItem value="PARTIEL">Partiel</SelectItem>
+                    <SelectItem value="PAYE">Payé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.paymentStatus === "PARTIEL" && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="inv-paid">Montant payé (FCFA)</Label>
+                  <Input
+                    id="inv-paid"
+                    type="number"
+                    min="0"
+                    value={form.amountPaid}
+                    onChange={(e) => set({ amountPaid: e.target.value })}
+                  />
+                </div>
+              )}
+              {type === "VENTE" && !isEdit && (
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <Checkbox
+                    id="inv-stock"
+                    checked={form.updateStock}
+                    onCheckedChange={(v) => set({ updateStock: v === true })}
+                  />
+                  <Label htmlFor="inv-stock" className="font-normal text-sm">
+                    Décrémenter le stock
+                  </Label>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Classement du crédit (création uniquement) */}
           {!isEdit && (
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CreditCard className="h-4 w-4 text-primary" aria-hidden />
                   Classement du crédit
@@ -1122,7 +916,7 @@ export function InvoiceEditor({
                   </div>
                 ) : (
                   <div
-                    className="grid gap-2 sm:grid-cols-3"
+                    className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"
                     role="radiogroup"
                     aria-label="Classement du crédit"
                   >
@@ -1221,7 +1015,7 @@ export function InvoiceEditor({
 
           {/* Notes */}
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-base">Notes</CardTitle>
             </CardHeader>
             <CardContent>
@@ -1234,20 +1028,10 @@ export function InvoiceEditor({
               />
             </CardContent>
           </Card>
-
-          {/* Bouton principal en bas de la colonne */}
-          <Button onClick={submit} disabled={saving} className="h-12 w-full text-base" size="lg">
-            {saving ? (
-              <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-            ) : (
-              <Save className="h-5 w-5" aria-hidden />
-            )}
-            {isEdit ? "Enregistrer le document" : "Créer la facture"}
-          </Button>
-        </section>
+        </div>
       </div>
 
-      {/* ─── Pages de création rapide ─── */}
+      {/* ─── Dialogues de création rapide ─── */}
       <QuickClientDialog
         open={clientDialog}
         onOpenChange={setClientDialog}
@@ -1267,7 +1051,19 @@ export function InvoiceEditor({
         presetName={productPreset}
         onCreated={(product) => {
           setLocalProducts((list) => [...list, product]);
-          pickProduct(product);
+          set({
+            items: [
+              ...form.items.filter((it) => it.productName.trim() || (Number(it.quantity) || 0) > 0),
+              {
+                productId: product.id,
+                productName: product.name,
+                category: product.category,
+                unit: product.unit,
+                quantity: "1",
+                unitPrice: String(product.salePrice),
+              },
+            ],
+          });
         }}
       />
     </div>
