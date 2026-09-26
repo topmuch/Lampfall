@@ -14,14 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -323,7 +316,7 @@ export function ClientsView() {
         </CardContent>
       </Card>
 
-      {/* Dialog création / édition */}
+      {/* Page création / édition */}
       <ClientFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -334,31 +327,25 @@ export function ClientsView() {
         submit={submit}
       />
 
-      {/* Confirmation suppression */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer le client ?</DialogTitle>
-            <DialogDescription>
-              {deleting &&
-                `Le client « ${deleting.name} » sera supprimé. Ses factures seront conservées sans client associé.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doDelete}>
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation suppression */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Supprimer le client ?"
+        description={
+          deleting &&
+          `Le client « ${deleting.name} » sera supprimé. Ses factures seront conservées sans client associé.`
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
     </div>
   );
 }
 
-// ─── Dialog création / édition client (partagé) ──────────────────────────────
+// ─── Page création / édition client (partagée) ─────────────────────────────
 
 function ClientFormDialog({
   open,
@@ -378,12 +365,23 @@ function ClientFormDialog({
   submit: () => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onOpenChange(false)}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Modifier le client" : "Nouveau client"}</DialogTitle>
-          <DialogDescription>Renseignez les coordonnées du client.</DialogDescription>
-        </DialogHeader>
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={editing ? "Modifier le client" : "Nouveau client"}
+      description="Renseignez les coordonnées du client."
+      actions={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Annuler
+          </Button>
+          <Button onClick={submit} disabled={saving} className="min-w-32">
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </>
+      }
+      maxWidth="max-w-2xl"
+    >
         <div className="grid gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="c-name">Nom complet / Raison sociale *</Label>
@@ -463,15 +461,6 @@ function ClientFormDialog({
             />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Annuler
-          </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </PageOverlay>
   );
 }

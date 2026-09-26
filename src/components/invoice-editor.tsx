@@ -19,14 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -34,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { PageOverlay } from "@/components/page-overlay";
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORY_LABELS, formatMoney, PRODUCT_CATEGORIES, toISODate } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -187,71 +180,68 @@ function QuickClientDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-primary" aria-hidden /> Nouveau client
-          </DialogTitle>
-          <DialogDescription>
-            Le client sera ajouté à votre répertoire et sélectionné pour cette facture.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={
+        <span className="flex items-center gap-2">
+          <UserPlus className="h-4 w-4 text-primary" aria-hidden /> Nouveau client
+        </span>
+      }
+      description="Le client sera ajouté à votre répertoire et sélectionné pour cette facture."
+      actions={
+        <Button onClick={submit} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+          Créer le client
+        </Button>
+      }
+      maxWidth="max-w-xl"
+    >
+      <div className="grid gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="qc-name">Nom *</Label>
+          <Input
+            id="qc-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex : M. Abdoulaye Diop"
+            autoFocus
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="qc-name">Nom *</Label>
+            <Label htmlFor="qc-phone">Téléphone</Label>
             <Input
-              id="qc-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex : M. Abdoulaye Diop"
-              autoFocus
+              id="qc-phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+221 …"
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="qc-phone">Téléphone</Label>
-              <Input
-                id="qc-phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+221 …"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select value={clientType} onValueChange={(v) => setClientType(v as "PARTICULIER" | "ENTREPRISE")}>
-                <SelectTrigger aria-label="Type de client">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PARTICULIER">Particulier</SelectItem>
-                  <SelectItem value="ENTREPRISE">Entreprise</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
           <div className="space-y-1.5">
-            <Label htmlFor="qc-address">Adresse</Label>
-            <Input
-              id="qc-address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Quartier, ville"
-            />
+            <Label>Type</Label>
+            <Select value={clientType} onValueChange={(v) => setClientType(v as "PARTICULIER" | "ENTREPRISE")}>
+              <SelectTrigger aria-label="Type de client">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PARTICULIER">Particulier</SelectItem>
+                <SelectItem value="ENTREPRISE">Entreprise</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Annuler
-          </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
-            Créer le client
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-1.5">
+          <Label htmlFor="qc-address">Adresse</Label>
+          <Input
+            id="qc-address"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Quartier, ville"
+          />
+        </div>
+      </div>
+    </PageOverlay>
   );
 }
 
@@ -355,95 +345,92 @@ function QuickProductDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-4 w-4 text-primary" aria-hidden /> Nouveau produit
-          </DialogTitle>
-          <DialogDescription>
-            Le produit sera ajouté au catalogue et inséré dans cette facture.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={
+        <span className="flex items-center gap-2">
+          <Plus className="h-4 w-4 text-primary" aria-hidden /> Nouveau produit
+        </span>
+      }
+      description="Le produit sera ajouté au catalogue et inséré dans cette facture."
+      actions={
+        <Button onClick={submit} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+          Créer le produit
+        </Button>
+      }
+      maxWidth="max-w-xl"
+    >
+      <div className="grid gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="qp-name">Désignation *</Label>
+          <Input
+            id="qp-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex : Robinet mélangeur"
+            autoFocus
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Catégorie *</Label>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger aria-label="Catégorie du produit">
+              <SelectValue placeholder="Choisir une catégorie…" />
+            </SelectTrigger>
+            <SelectContent className="max-h-56">
+              {categories.map((c) => (
+                <SelectItem key={c.code} value={c.code}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="qp-name">Désignation *</Label>
+            <Label htmlFor="qp-purchase">Prix d&apos;achat (FCFA)</Label>
             <Input
-              id="qp-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex : Robinet mélangeur"
-              autoFocus
+              id="qp-purchase"
+              type="number"
+              min="0"
+              value={purchasePrice}
+              onChange={(e) => setPurchasePrice(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Catégorie *</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger aria-label="Catégorie du produit">
-                <SelectValue placeholder="Choisir une catégorie…" />
-              </SelectTrigger>
-              <SelectContent className="max-h-56">
-                {categories.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="qp-sale">Prix de vente (FCFA)</Label>
+            <Input
+              id="qp-sale"
+              type="number"
+              min="0"
+              value={salePrice}
+              onChange={(e) => setSalePrice(e.target.value)}
+            />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="qp-purchase">Prix d&apos;achat (FCFA)</Label>
-              <Input
-                id="qp-purchase"
-                type="number"
-                min="0"
-                value={purchasePrice}
-                onChange={(e) => setPurchasePrice(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="qp-sale">Prix de vente (FCFA)</Label>
-              <Input
-                id="qp-sale"
-                type="number"
-                min="0"
-                value={salePrice}
-                onChange={(e) => setSalePrice(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="qp-stock">Stock initial</Label>
-              <Input
-                id="qp-stock"
-                type="number"
-                min="0"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="qp-unit">Unité</Label>
-              <Input
-                id="qp-unit"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="pièce, m, sac…"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="qp-stock">Stock initial</Label>
+            <Input
+              id="qp-stock"
+              type="number"
+              min="0"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="qp-unit">Unité</Label>
+            <Input
+              id="qp-unit"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="pièce, m, sac…"
+            />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Annuler
-          </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
-            Créer le produit
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </PageOverlay>
   );
 }
 

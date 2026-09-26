@@ -4,14 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PageOverlay } from "@/components/page-overlay";
 import {
   Select,
   SelectContent,
@@ -291,19 +284,34 @@ export function ProductImportDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden />
-            Importer des produits (Excel / CSV)
-          </DialogTitle>
-          <DialogDescription>
-            Chargez un fichier .xlsx, .xls ou .csv. Colonnes attendues : Nom, Référence,
-            Catégorie, Prix achat, Prix vente, Stock, Unité, Stock min. Seule la colonne{" "}
-            <strong>Nom</strong> est obligatoire.
-          </DialogDescription>
-        </DialogHeader>
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={
+        <span className="flex items-center gap-2">
+          <FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden />
+          Importer des produits (Excel / CSV)
+        </span>
+      }
+      description={
+        <>
+          Chargez un fichier .xlsx, .xls ou .csv. Colonnes attendues : Nom, Référence,
+          Catégorie, Prix achat, Prix vente, Stock, Unité, Stock min. Seule la colonne{" "}
+          <strong>Nom</strong> est obligatoire.
+        </>
+      }
+      actions={
+        <Button onClick={runImport} disabled={importing || validRows.length === 0}>
+          {importing ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Upload className="h-4 w-4" aria-hidden />
+          )}
+          Importer {validRows.length > 0 ? `${validRows.length} produit(s)` : ""}
+        </Button>
+      }
+      maxWidth="max-w-4xl"
+    >
 
         <div className="grid gap-4">
           {/* Zone de dépôt / sélection */}
@@ -419,28 +427,13 @@ export function ProductImportDialog({
               {results.failed ? ` — ❌ ${results.failed} échec(s)` : ""}.
             </p>
           )}
-        </div>
-
-        <DialogFooter className="items-center gap-2">
           {importing && (
-            <span className="mr-auto flex items-center gap-2 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Import… {progress.done}/{progress.total}
-            </span>
+            </p>
           )}
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={importing}>
-            Fermer
-          </Button>
-          <Button onClick={runImport} disabled={importing || validRows.length === 0}>
-            {importing ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <Upload className="h-4 w-4" aria-hidden />
-            )}
-            Importer {validRows.length > 0 ? `${validRows.length} produit(s)` : ""}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </PageOverlay>
   );
 }

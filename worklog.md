@@ -790,3 +790,21 @@ Stage Summary:
 - Tous les écrans d'articles (facture VENTE, proforma, commerçant, immo, achats fournisseur, commandes) permettent désormais d'ajouter autant de lignes produits que voulu (bouton +).
 - PDF 100 % harmonisés : même police (Times italique), même gras italique, mêmes tailles ×1,25 que les factures sur les ~11 types de documents.
 - Aucune migration DB requise ; état de référence conservé (24 produits, 11 factures, 3 commandes, 6 clients).
+
+---
+Task ID: 3
+Agent: Z.ai Code (principal)
+Task: Enlever le système d'ouverture en modale sur tout le système et le remplacer par des ouvertures en page plein écran.
+
+Work Log:
+- Audit complet : 31 Dialog/AlertDialog modales recensées dans 17 fichiers ; InvoiceEditor était déjà une page plein écran (fixed inset-0) — pattern retenu pour tout le système.
+- Nouveau composant src/components/page-overlay.tsx : PageOverlay (page plein écran z-50, en-tête collant avec bouton Retour + titre + description + actions à droite, verrouillage du scroll du corps, Échap ferme uniquement la page au sommet de la pile via une pile module-level, animation slide-in tailwindcss-animate) + ConfirmPage (page de confirmation centrée, bouton destructif optionnel, busy/spinner, prop error visible).
+- Conversions Dialog → Page : orders-view (création/édition commande + confirmations suppression/conversion), purchases-view (nouvel achat + nouveau fournisseur + suppression), clients-view (formulaire client partagé + suppression), suppliers-view (formulaire + historique achats + suppression avec erreur visible), products-view (produit + catégories + ajustement stock + 2 suppressions), invoices-view (2 confirmations), credit-purchases-view (CreditPaymentsDialog + annulation transfert), payments-dialog (versements facture), ticket-preview-dialog (aperçu ticket 80 mm), invoice-share-dialog (envoi/relance), transfer-credit-dialog (transfert crédit), product-import-dialog (import Excel/CSV), users-view (utilisateur + suppression), settings-view (restauration sauvegarde), app-shell (changement mot de passe), invoice-editor (créations rapides client/produit).
+- items-editor.tsx : bouton « Ajouter une ligne » rendu plus visible (bordure tiretée primaire).
+- Suppression de src/components/invoice-dialog.tsx (composant mort jamais importé).
+- Tests agent-browser end-to-end : login admin ; commande CMD-2026-0004 créée en PAGE avec 2 produits manuels via « Ajouter une ligne » (total exact 9 000 F) puis supprimée via ConfirmPage ; facture FV-2026-0008 créée avec 2 articles puis supprimée via ConfirmPage ; client créé via page puis supprimé ; pages Produits/Fournisseurs/Import/Commerçant ouvertes et fermées (Retour + Échap) ; viewport mobile 390×844 vérifié par capture ; lint 0 erreur ; dev.log sans erreur ; base restaurée à l'état de référence (24 produits / 6 clients / 11 factures / 3 commandes, zéro donnée test).
+
+Stage Summary:
+- ZÉRO modale restante : tous les formulaires, éditeurs, aperçus, historiques et confirmations s'ouvrent désormais en PAGE plein écran (pattern uniforme : en-tête collant + bouton Retour + actions « Annuler/Enregistrer » en haut à droite).
+- PageOverlay centralise scroll-lock, Échap (pile), animation et accessibilité (role=dialog aria-modal).
+- Suppression du code mort invoice-dialog.tsx ; aucun changement API/DB requis.

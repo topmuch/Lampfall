@@ -14,14 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -431,17 +424,23 @@ export function OrdersView() {
         </CardContent>
       </Card>
 
-      {/* Dialog création / édition */}
-      <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
-        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editing ? `Modifier la commande ${editing.number}` : "Nouvelle commande prévisionnelle"}
-            </DialogTitle>
-            <DialogDescription>
-              Cette commande anticipe un besoin — convertissable en facture de vente.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page création / édition */}
+      <PageOverlay
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editing ? `Modifier la commande ${editing.number}` : "Nouvelle commande prévisionnelle"}
+        description="Cette commande anticipe un besoin — convertissable en facture de vente."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              Annuler
+            </Button>
+            <Button onClick={submit} disabled={saving} className="min-w-32">
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </>
+        }
+      >
           <div className="grid gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -537,57 +536,37 @@ export function OrdersView() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Annuler
-            </Button>
-            <Button onClick={submit} disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
-      {/* Confirmation suppression */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer la commande ?</DialogTitle>
-            <DialogDescription>
-              {deleting && `La commande ${deleting.number} sera définitivement supprimée.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doDelete}>
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation suppression */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Supprimer la commande ?"
+        description={
+          deleting && `La commande ${deleting.number} sera définitivement supprimée.`
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
 
-      {/* Confirmation conversion */}
-      <Dialog open={convertTarget !== null} onOpenChange={(v) => !v && setConvertTarget(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Convertir en facture de vente ?</DialogTitle>
-            <DialogDescription>
-              {convertTarget &&
-                `Une facture sera créée depuis la commande ${convertTarget.number}, le stock sera décrémenté et la commande passera en « Confirmée ».`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConvertTarget(null)} disabled={busy}>
-              Annuler
-            </Button>
-            <Button onClick={doConvert} disabled={busy}>
-              {busy ? "Conversion…" : "Convertir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation conversion */}
+      <ConfirmPage
+        open={convertTarget !== null}
+        onClose={() => setConvertTarget(null)}
+        onConfirm={doConvert}
+        title="Convertir en facture de vente ?"
+        description={
+          convertTarget &&
+          `Une facture sera créée depuis la commande ${convertTarget.number}, le stock sera décrémenté et la commande passera en « Confirmée ».`
+        }
+        confirmLabel="Convertir"
+        busy={busy}
+        busyLabel="Conversion…"
+        icon={<Repeat1 className="h-6 w-6 text-primary" aria-hidden />}
+      />
     </div>
   );
 }

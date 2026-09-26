@@ -20,14 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Bell,
@@ -56,6 +48,7 @@ import {
   PaymentBadge,
 } from "@/components/status-badges";
 import { InvoiceEditor } from "@/components/invoice-editor";
+import { ConfirmPage } from "@/components/page-overlay";
 import { InvoiceShareDialog } from "@/components/invoice-share-dialog";
 import { PaymentsDialog } from "@/components/payments-dialog";
 import {
@@ -551,49 +544,40 @@ export function InvoicesView({ type, onNavigateToInvoices, autoOpenNew, onAutoOp
         onTransferred={() => refetchTransfers()}
       />
 
-      {/* Confirmation suppression */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer la facture ?</DialogTitle>
-            <DialogDescription>
-              {deleting &&
-                `La facture ${deleting.number} (${formatMoney(deleting.totalTTC)}) sera définitivement supprimée${
-                  !isProforma ? " et le stock des produits concernés sera restauré." : "."
-                }`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={busy}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doDelete} disabled={busy}>
-              {busy ? "Suppression…" : "Supprimer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation suppression */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Supprimer la facture ?"
+        description={
+          deleting &&
+          `La facture ${deleting.number} (${formatMoney(deleting.totalTTC)}) sera définitivement supprimée${
+            !isProforma ? " et le stock des produits concernés sera restauré." : "."
+          }`
+        }
+        confirmLabel={busy ? "Suppression…" : "Supprimer"}
+        destructive
+        busy={busy}
+        busyLabel="Suppression…"
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
 
-      {/* Confirmation conversion proforma */}
-      <Dialog open={convertTarget !== null} onOpenChange={(v) => !v && setConvertTarget(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Convertir en facture de vente ?</DialogTitle>
-            <DialogDescription>
-              {convertTarget &&
-                `Une facture définitive sera créée à partir du proforma ${convertTarget.number}. Le stock des produits du catalogue sera décrémenté.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConvertTarget(null)} disabled={busy}>
-              Annuler
-            </Button>
-            <Button onClick={doConvert} disabled={busy}>
-              {busy ? "Conversion…" : "Convertir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation conversion proforma */}
+      <ConfirmPage
+        open={convertTarget !== null}
+        onClose={() => setConvertTarget(null)}
+        onConfirm={doConvert}
+        title="Convertir en facture de vente ?"
+        description={
+          convertTarget &&
+          `Une facture définitive sera créée à partir du proforma ${convertTarget.number}. Le stock des produits du catalogue sera décrémenté.`
+        }
+        confirmLabel={busy ? "Conversion…" : "Convertir"}
+        busy={busy}
+        busyLabel="Conversion…"
+        icon={<Repeat1 className="h-6 w-6 text-primary" aria-hidden />}
+      />
     </div>
   );
 }

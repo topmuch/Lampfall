@@ -13,14 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import {
   Select,
   SelectContent,
@@ -597,15 +590,24 @@ export function ProductsView() {
         </CardContent>
       </Card>
 
-      {/* Dialog produit */}
-      <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Modifier le produit" : "Nouveau produit"}</DialogTitle>
-            <DialogDescription>
-              Produit du catalogue (sanitaire, plomberie, luminaire…).
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page produit */}
+      <PageOverlay
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editing ? "Modifier le produit" : "Nouveau produit"}
+        description="Produit du catalogue (sanitaire, plomberie, luminaire…)."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              Annuler
+            </Button>
+            <Button onClick={submit} disabled={saving} className="min-w-32">
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </>
+        }
+        maxWidth="max-w-2xl"
+      >
           <div className="grid gap-3">
             {/* Image du produit */}
             <div className="space-y-1.5">
@@ -751,28 +753,20 @@ export function ProductsView() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Annuler
-            </Button>
-            <Button onClick={submit} disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
-      {/* Dialog gestion des catégories */}
-      <Dialog open={catDialogOpen} onOpenChange={(v) => !v && setCatDialogOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Tags className="h-5 w-5 text-primary" /> Gestion des catégories
-            </DialogTitle>
-            <DialogDescription>
-              Créez une nouvelle catégorie ou supprimez une catégorie vide.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page gestion des catégories */}
+      <PageOverlay
+        open={catDialogOpen}
+        onClose={() => setCatDialogOpen(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Tags className="h-5 w-5 text-primary" /> Gestion des catégories
+          </span>
+        }
+        description="Créez une nouvelle catégorie ou supprimez une catégorie vide."
+        maxWidth="max-w-2xl"
+      >
 
           <div className="flex gap-2">
             <Input
@@ -812,63 +806,57 @@ export function ProductsView() {
               ))}
             </ul>
           </div>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
-      {/* Confirmation suppression catégorie */}
-      <Dialog open={catToDelete !== null} onOpenChange={(v) => !v && setCatToDelete(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer la catégorie ?</DialogTitle>
-            <DialogDescription>
-              La suppression échouera si des produits utilisent encore cette catégorie.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCatToDelete(null)}>
+      {/* Page confirmation suppression catégorie */}
+      <ConfirmPage
+        open={catToDelete !== null}
+        onClose={() => setCatToDelete(null)}
+        onConfirm={doDeleteCategory}
+        title="Supprimer la catégorie ?"
+        description="La suppression échouera si des produits utilisent encore cette catégorie."
+        confirmLabel={catBusy ? "Suppression…" : "Supprimer"}
+        destructive
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
+
+      {/* Page confirmation suppression produit */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Supprimer le produit ?"
+        description={deleting && `« ${deleting.name} » sera retiré du catalogue de façon définitive.`}
+        confirmLabel="Supprimer"
+        destructive
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
+
+      {/* Page ajustement du stock */}
+      <PageOverlay
+        open={adjusting !== null}
+        onClose={() => setAdjusting(null)}
+        title="Ajuster le stock"
+        description={
+          adjusting && (
+            <>
+              Produit : <span className="font-medium text-foreground">{adjusting.name}</span>
+              {adjusting.reference ? ` (${adjusting.reference})` : ""}
+            </>
+          )
+        }
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setAdjusting(null)} disabled={adjustBusy}>
               Annuler
             </Button>
-            <Button variant="destructive" onClick={doDeleteCategory} disabled={catBusy}>
-              {catBusy ? "Suppression…" : "Supprimer"}
+            <Button onClick={submitAdjustment} disabled={adjustBusy} className="min-w-28">
+              {adjustBusy ? "Ajustement…" : "Ajuster"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmation suppression produit */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer le produit ?</DialogTitle>
-            <DialogDescription>
-              {deleting && `« ${deleting.name} » sera retiré du catalogue de façon définitive.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doDelete}>
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog ajustement du stock */}
-      <Dialog open={adjusting !== null} onOpenChange={(v) => !v && setAdjusting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Ajuster le stock</DialogTitle>
-            <DialogDescription>
-              {adjusting && (
-                <>
-                  Produit : <span className="font-medium text-foreground">{adjusting.name}</span>
-                  {adjusting.reference ? ` (${adjusting.reference})` : ""}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+          </>
+        }
+        maxWidth="max-w-2xl"
+      >
           <div className="grid gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="adj-current">Stock actuel</Label>
@@ -912,16 +900,7 @@ export function ProductsView() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjusting(null)} disabled={adjustBusy}>
-              Annuler
-            </Button>
-            <Button onClick={submitAdjustment} disabled={adjustBusy} className="min-w-28">
-              {adjustBusy ? "Ajustement…" : "Ajuster"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
       {/* Import de produits par Excel / CSV */}
       <ProductImportDialog

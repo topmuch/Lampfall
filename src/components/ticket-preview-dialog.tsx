@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Printer } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PageOverlay } from "@/components/page-overlay";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { buildPaymentTicketHTML, printTicket80 } from "@/lib/pdf";
@@ -80,16 +73,25 @@ export function TicketPreviewDialog({ open, onOpenChange, payment, doc }: Ticket
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Aperçu du ticket 80 mm</DialogTitle>
-          <DialogDescription>
-            Reçu de versement prêt pour l&apos;imprimante thermique (80 mm).
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex justify-center rounded-xl bg-muted/60 p-4">
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="Aperçu du ticket 80 mm"
+      description="Reçu de versement prêt pour l'imprimante thermique (80 mm)."
+      actions={
+        <Button onClick={handlePrint} disabled={!html || building}>
+          {building ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Printer className="h-4 w-4" aria-hidden />
+          )}
+          Imprimer (80 mm)
+        </Button>
+      }
+      maxWidth="max-w-2xl"
+    >
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex w-full max-w-sm justify-center rounded-xl bg-muted/60 p-4">
           {building ? (
             <div className="flex h-72 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden />
@@ -105,21 +107,7 @@ export function TicketPreviewDialog({ open, onOpenChange, payment, doc }: Ticket
             <p className="py-16 text-sm text-muted-foreground">Aperçu indisponible.</p>
           )}
         </div>
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Fermer
-          </Button>
-          <Button onClick={handlePrint} disabled={!html || building}>
-            {building ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <Printer className="h-4 w-4" aria-hidden />
-            )}
-            Imprimer (80 mm)
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </PageOverlay>
   );
 }

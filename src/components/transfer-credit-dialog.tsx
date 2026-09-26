@@ -5,14 +5,7 @@ import { Building2, Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PageOverlay } from "@/components/page-overlay";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-client";
 import { formatMoney } from "@/lib/constants";
@@ -105,20 +98,26 @@ export function TransferCreditDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Transférer en achat à crédit</DialogTitle>
-          <DialogDescription>
-            {invoice && (
-              <>
-                Document <strong>{invoice.number}</strong> — {formatMoney(invoice.totalTTC)} (
-                {invoice.clientName || "Client comptoir"}).
-              </>
-            )}{" "}
-            Choisissez le registre de destination.
-          </DialogDescription>
-        </DialogHeader>
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="Transférer en achat à crédit"
+      description={
+        invoice && (
+          <>
+            Document <strong>{invoice.number}</strong> — {formatMoney(invoice.totalTTC)} (
+            {invoice.clientName || "Client comptoir"}).{" "}
+          </>
+        )
+      }
+      actions={
+        <Button onClick={submit} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Store className="h-4 w-4" aria-hidden />}
+          Transférer
+        </Button>
+      }
+      maxWidth="max-w-2xl"
+    >
 
         <div className="space-y-4">
           {/* Destination */}
@@ -176,17 +175,6 @@ export function TransferCreditDialog({
             </div>
           </div>
         </div>
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Annuler
-          </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Store className="h-4 w-4" aria-hidden />}
-            Transférer
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </PageOverlay>
   );
 }

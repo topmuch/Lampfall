@@ -5,13 +5,7 @@ import { Loader2, Plus, Receipt, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PageOverlay } from "@/components/page-overlay";
 import {
   Select,
   SelectContent,
@@ -183,17 +177,19 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
     : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <>
+      <PageOverlay
+        open={open}
+        onClose={() => onOpenChange(false)}
+        title={
+          <span className="flex items-center gap-2">
             <Wallet className="h-5 w-5 text-primary" aria-hidden />
             Versements {current ? `— ${current.number}` : ""}
-          </DialogTitle>
-          <DialogDescription>
-            Encaissements partiels ou totaux : le statut de paiement est recalculé automatiquement.
-          </DialogDescription>
-        </DialogHeader>
+          </span>
+        }
+        description="Encaissements partiels ou totaux : le statut de paiement est recalculé automatiquement."
+        maxWidth="max-w-3xl"
+      >
 
         {current ? (
           <div className="space-y-4">
@@ -362,7 +358,7 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
             <Skeleton className="h-24 w-full" />
           </div>
         )}
-      </DialogContent>
+      </PageOverlay>
 
       {/* Aperçu du reçu de versement — ticket 80 mm */}
       <TicketPreviewDialog
@@ -371,6 +367,6 @@ export function PaymentsDialog({ invoice, open, onOpenChange, onUpdated }: Payme
         payment={ticketPayment}
         doc={ticketDoc}
       />
-    </Dialog>
+    </>
   );
 }

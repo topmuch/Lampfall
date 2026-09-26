@@ -183,7 +183,7 @@ export function ItemsEditor({
           onClick={() => onChange([...items, emptyItem()])}
           disabled={disabled}
           aria-label="Ajouter une ligne article vide"
-          className="h-10 gap-1.5"
+          className="h-10 gap-1.5 border-dashed border-primary/50 font-semibold text-primary hover:bg-primary/5 hover:text-primary"
         >
           <Plus className="h-4 w-4" aria-hidden />
           Ajouter une ligne

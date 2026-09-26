@@ -14,14 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -308,17 +301,28 @@ export function SuppliersView() {
         </CardContent>
       </Card>
 
-      {/* Dialog création / édition */}
-      <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Modifier le fournisseur" : "Nouveau fournisseur"}</DialogTitle>
-            <DialogDescription>
-              {editing
-                ? `Mettez à jour la fiche de « ${editing.name} ».`
-                : "Ajoutez un fournisseur au répertoire pour le retrouver dans les achats."}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page création / édition */}
+      <PageOverlay
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editing ? "Modifier le fournisseur" : "Nouveau fournisseur"}
+        description={
+          editing
+            ? `Mettez à jour la fiche de « ${editing.name} ».`
+            : "Ajoutez un fournisseur au répertoire pour le retrouver dans les achats."
+        }
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              Annuler
+            </Button>
+            <Button onClick={submit} disabled={saving} className="min-w-28">
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </>
+        }
+        maxWidth="max-w-2xl"
+      >
           <div className="grid gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="sup-name">Nom *</Label>
@@ -370,54 +374,31 @@ export function SuppliersView() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Annuler
-            </Button>
-            <Button onClick={submit} disabled={saving} className="min-w-28">
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
-      {/* Confirmation de suppression */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer le fournisseur ?</DialogTitle>
-            <DialogDescription>
-              {deleting && `« ${deleting.name} » sera retiré du répertoire de façon définitive.`}
-            </DialogDescription>
-          </DialogHeader>
-          {deleteError && (
-            <div
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {deleteError}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deleteBusy}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doDelete} disabled={deleteBusy} className="min-w-28">
-              {deleteBusy ? "Suppression…" : "Supprimer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation de suppression */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Supprimer le fournisseur ?"
+        description={deleting && `« ${deleting.name} » sera retiré du répertoire de façon définitive.`}
+        confirmLabel="Supprimer"
+        destructive
+        busy={deleteBusy}
+        busyLabel="Suppression…"
+        error={deleting !== null ? deleteError : null}
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
 
-      {/* Historique des achats du fournisseur */}
-      <Dialog open={historyFor !== null} onOpenChange={(v) => !v && setHistoryFor(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Achats — {historyFor?.name}</DialogTitle>
-            <DialogDescription>
-              Historique des factures d&apos;achat liées à ce fournisseur.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page historique des achats du fournisseur */}
+      <PageOverlay
+        open={historyFor !== null}
+        onClose={() => setHistoryFor(null)}
+        title={`Achats — ${historyFor?.name ?? ""}`}
+        description="Historique des factures d'achat liées à ce fournisseur."
+        maxWidth="max-w-2xl"
+      >
           {historyLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -465,8 +446,7 @@ export function SuppliersView() {
               <span className="font-bold tabular-nums">{formatMoney(historyTotal)}</span>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
     </div>
   );
 }

@@ -8,14 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage } from "@/components/page-overlay";
 import {
   AlertTriangle,
   ArchiveRestore,
@@ -480,38 +473,25 @@ export function SettingsView() {
         </CardContent>
       </Card>
 
-      {/* Confirmation de restauration (action irréversible) */}
-      <Dialog open={confirmOpen} onOpenChange={(v) => !restoreBusy && setConfirmOpen(v)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" aria-hidden />
-              Restaurer la sauvegarde ?
-            </DialogTitle>
-            <DialogDescription>
-              Toutes les données actuelles seront remplacées par le contenu de la sauvegarde
-              {restoreFileName ? (
-                <span className="font-semibold"> « {restoreFileName} »</span>
-              ) : null}
-              . Cette action est <span className="font-semibold">irréversible</span>.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={restoreBusy}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doRestore} disabled={restoreBusy}>
-              {restoreBusy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Remplacement…
-                </>
-              ) : (
-                "Remplacer les données"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page de confirmation de restauration (action irréversible) */}
+      <ConfirmPage
+        open={confirmOpen}
+        onClose={() => !restoreBusy && setConfirmOpen(false)}
+        onConfirm={doRestore}
+        title="Restaurer la sauvegarde ?"
+        description={
+          <>
+            Toutes les données actuelles seront remplacées par le contenu de la sauvegarde
+            {restoreFileName ? <span className="font-semibold"> « {restoreFileName} »</span> : null}. Cette
+            action est <span className="font-semibold">irréversible</span>.
+          </>
+        }
+        confirmLabel={restoreBusy ? "Remplacement…" : "Remplacer les données"}
+        destructive
+        busy={restoreBusy}
+        busyLabel="Remplacement…"
+        icon={<AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />}
+      />
     </div>
   );
 }

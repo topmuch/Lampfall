@@ -26,14 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import {
   Select,
   SelectContent,
@@ -205,17 +198,19 @@ function CreditPaymentsDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <>
+      <PageOverlay
+        open={open}
+        onClose={() => onOpenChange(false)}
+        title={
+          <span className="flex items-center gap-2">
             <Wallet className="h-5 w-5 text-primary" aria-hidden />
             Versements {current ? `— ${current.number}` : ""}
-          </DialogTitle>
-          <DialogDescription>
-            Règlements effectués au {current?.tier ?? "tiers"} : le solde est recalculé automatiquement.
-          </DialogDescription>
-        </DialogHeader>
+          </span>
+        }
+        description={`Règlements effectués au ${current?.tier ?? "tiers"} : le solde est recalculé automatiquement.`}
+        maxWidth="max-w-3xl"
+      >
 
         {current ? (
           <div className="space-y-4">
@@ -384,7 +379,7 @@ function CreditPaymentsDialog({
             <Skeleton className="h-24 w-full" />
           </div>
         )}
-      </DialogContent>
+      </PageOverlay>
 
       {/* Aperçu du reçu de versement — ticket 80 mm (règlement crédit) */}
       <TicketPreviewDialog
@@ -402,7 +397,7 @@ function CreditPaymentsDialog({
             : null
         }
       />
-    </Dialog>
+    </>
   );
 }
 
@@ -806,31 +801,27 @@ export function CreditPurchasesView({ destination }: { destination: "COMMERCANT"
         onUpdated={refetch}
       />
 
-      {/* Confirmation annulation du transfert */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Annuler le transfert ?</DialogTitle>
-            <DialogDescription>
-              {deleting && (
-                <>
-                  Le document <strong>{deleting.number}</strong> ({formatMoney(deleting.total)}) sera retiré
-                  des achats à crédit. La facture d&apos;origine reste inchangée dans son onglet.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={busy}>
-              Retour
-            </Button>
-            <Button variant="destructive" onClick={doDelete} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
-              Annuler le transfert
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation annulation du transfert */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Annuler le transfert ?"
+        description={
+          deleting && (
+            <>
+              Le document <strong>{deleting.number}</strong> ({formatMoney(deleting.total)}) sera retiré
+              des achats à crédit. La facture d&apos;origine reste inchangée dans son onglet.
+            </>
+          )
+        }
+        confirmLabel={busy ? "Annulation…" : "Annuler le transfert"}
+        cancelLabel="Retour"
+        destructive
+        busy={busy}
+        busyLabel="Annulation…"
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
     </div>
   );
 }

@@ -6,14 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PageOverlay } from "@/components/page-overlay";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -223,37 +216,34 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Changer mon mot de passe</DialogTitle>
-          <DialogDescription>Choisissez un mot de passe d&apos;au moins 6 caractères.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="pw-current">Mot de passe actuel</Label>
-            <Input id="pw-current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pw-next">Nouveau mot de passe</Label>
-            <Input id="pw-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pw-confirm">Confirmer</Label>
-            <Input id="pw-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-          </div>
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="Changer mon mot de passe"
+      description="Choisissez un mot de passe d'au moins 6 caractères."
+      actions={
+        <Button onClick={submit} disabled={saving || !current || next.length < 6} className="min-w-28">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <KeyRound className="h-4 w-4" aria-hidden />}
+          Modifier
+        </Button>
+      }
+      maxWidth="max-w-xl"
+    >
+      <div className="mx-auto mt-6 max-w-md space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="pw-current">Mot de passe actuel</Label>
+          <Input id="pw-current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Annuler
-          </Button>
-          <Button onClick={submit} disabled={saving || !current || next.length < 6}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <KeyRound className="h-4 w-4" aria-hidden />}
-            Modifier
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-1.5">
+          <Label htmlFor="pw-next">Nouveau mot de passe</Label>
+          <Input id="pw-next" type="password" value={next} onChange={(e) => setNext(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pw-confirm">Confirmer</Label>
+          <Input id="pw-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        </div>
+      </div>
+    </PageOverlay>
   );
 }
 

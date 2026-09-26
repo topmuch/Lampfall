@@ -15,14 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -402,15 +395,23 @@ export function PurchasesView() {
         </CardContent>
       </Card>
 
-      {/* Dialog nouvel achat */}
-      <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
-        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nouvelle facture d&apos;achat</DialogTitle>
-            <DialogDescription>
-              Enregistrez l&apos;achat et joignez éventuellement le scan de la facture (PDF ou image).
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page nouvel achat */}
+      <PageOverlay
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title="Nouvelle facture d'achat"
+        description="Enregistrez l'achat et joignez éventuellement le scan de la facture (PDF ou image)."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              Annuler
+            </Button>
+            <Button onClick={submit} disabled={saving} className="min-w-32">
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </>
+        }
+      >
           <div className="grid gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -534,47 +535,36 @@ export function PurchasesView() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Annuler
-            </Button>
-            <Button onClick={submit} disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
-      {/* Confirmation suppression */}
-      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer la facture d&apos;achat ?</DialogTitle>
-            <DialogDescription>
-              {deleting &&
-                `L'achat ${deleting.number} (${formatMoney(deleting.total)}) et sa pièce jointe seront définitivement supprimés.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={doDelete}>
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Page confirmation suppression */}
+      <ConfirmPage
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        title="Supprimer la facture d'achat ?"
+        description={
+          deleting &&
+          `L'achat ${deleting.number} (${formatMoney(deleting.total)}) et sa pièce jointe seront définitivement supprimés.`
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
 
-      {/* Mini-dialog nouveau fournisseur (répertoire) */}
-      <Dialog open={newSupOpen} onOpenChange={(v) => !v && setNewSupOpen(false)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Nouveau fournisseur</DialogTitle>
-            <DialogDescription>
-              Ajoutez le fournisseur au répertoire : il sera présélectionné pour cet achat.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page nouveau fournisseur (répertoire) */}
+      <PageOverlay
+        open={newSupOpen}
+        onClose={() => setNewSupOpen(false)}
+        title="Nouveau fournisseur"
+        description="Ajoutez le fournisseur au répertoire : il sera présélectionné pour cet achat."
+        actions={
+          <Button onClick={submitNewSupplier} disabled={newSupBusy || !newSup.name.trim()} className="min-w-24">
+            {newSupBusy ? "Création…" : "Créer"}
+          </Button>
+        }
+        maxWidth="max-w-2xl"
+      >
           <div className="grid gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="ns-name">Nom *</Label>
@@ -595,16 +585,7 @@ export function PurchasesView() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewSupOpen(false)} disabled={newSupBusy}>
-              Annuler
-            </Button>
-            <Button onClick={submitNewSupplier} disabled={newSupBusy || !newSup.name.trim()} className="min-w-24">
-              {newSupBusy ? "Création…" : "Créer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
     </div>
   );
 }

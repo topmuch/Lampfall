@@ -4,14 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -287,17 +280,31 @@ export function UsersView({ currentUser }: { currentUser: AuthUser }) {
         </CardContent>
       </Card>
 
-      {/* Dialog création / édition */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Modifier l'utilisateur" : "Nouvel utilisateur"}</DialogTitle>
-            <DialogDescription>
-              {editing
-                ? `Compte « ${editing.username} » — laissez le mot de passe vide pour le conserver.`
-                : "Créez un compte administrateur ou employé."}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Page création / édition */}
+      <PageOverlay
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editing ? "Modifier l'utilisateur" : "Nouvel utilisateur"}
+        description={
+          editing
+            ? `Compte « ${editing.username} » — laissez le mot de passe vide pour le conserver.`
+            : "Créez un compte administrateur ou employé."
+        }
+        actions={
+          <Button onClick={save} disabled={saving || !form.name.trim() || !form.username.trim()}>
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Enregistrement…
+              </>
+            ) : editing ? (
+              "Enregistrer"
+            ) : (
+              "Créer le compte"
+            )}
+          </Button>
+        }
+        maxWidth="max-w-2xl"
+      >
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="u-name">Nom complet</Label>
@@ -355,42 +362,23 @@ export function UsersView({ currentUser }: { currentUser: AuthUser }) {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Annuler
-            </Button>
-            <Button onClick={save} disabled={saving || !form.name.trim() || !form.username.trim()}>
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Enregistrement…
-                </>
-              ) : editing ? (
-                "Enregistrer"
-              ) : (
-                "Créer le compte"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </PageOverlay>
 
-      {/* Confirmation suppression */}
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer cet utilisateur ?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Le compte « {deleting?.username} » ({deleting?.name}) sera définitivement supprimé.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={remove} className="bg-destructive text-white hover:bg-destructive/90">
-              <Trash2 className="h-4 w-4 mr-1" aria-hidden /> Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Page confirmation suppression */}
+      <ConfirmPage
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={remove}
+        title="Supprimer cet utilisateur ?"
+        description={
+          <>
+            Le compte « {deleting?.username} » ({deleting?.name}) sera définitivement supprimé.
+          </>
+        }
+        confirmLabel="Supprimer"
+        destructive
+        icon={<Trash2 className="h-6 w-6 text-destructive" aria-hidden />}
+      />
     </div>
   );
 }

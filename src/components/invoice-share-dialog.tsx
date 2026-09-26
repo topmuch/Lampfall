@@ -11,13 +11,7 @@ import {
   Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PageOverlay } from "@/components/page-overlay";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -150,23 +144,26 @@ export function InvoiceShareDialog({ invoice, mode, open, onOpenChange }: Invoic
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isRelance ? (
-              <Bell className="h-5 w-5 text-amber-500" aria-hidden />
-            ) : (
-              <Send className="h-5 w-5 text-primary" aria-hidden />
-            )}
-            {isRelance ? "Relancer le client" : "Envoyer la facture"}
-          </DialogTitle>
-          <DialogDescription>
-            {isRelance
-              ? "Envoyez un rappel de paiement par WhatsApp ou par email."
-              : "Transmettez la facture au client accompagnée d'un message."}
-          </DialogDescription>
-        </DialogHeader>
+    <PageOverlay
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={
+        <span className="flex items-center gap-2">
+          {isRelance ? (
+            <Bell className="h-5 w-5 text-amber-500" aria-hidden />
+          ) : (
+            <Send className="h-5 w-5 text-primary" aria-hidden />
+          )}
+          {isRelance ? "Relancer le client" : "Envoyer la facture"}
+        </span>
+      }
+      description={
+        isRelance
+          ? "Envoyez un rappel de paiement par WhatsApp ou par email."
+          : "Transmettez la facture au client accompagnée d'un message."
+      }
+      maxWidth="max-w-2xl"
+    >
 
         {invoice && (
           <>
@@ -255,7 +252,6 @@ export function InvoiceShareDialog({ invoice, mode, open, onOpenChange }: Invoic
             </Button>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+    </PageOverlay>
   );
 }
