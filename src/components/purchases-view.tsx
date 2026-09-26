@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -34,11 +34,16 @@ import {
   Download,
   Eye,
   FileText,
+  LayoutGrid,
+  Loader2,
   MoreHorizontal,
   Paperclip,
+  PenLine,
   Plus,
+  Save,
   Search,
   ShoppingBag,
+  ShoppingCart,
   Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -46,12 +51,9 @@ import { useDebouncedValue, useFetch } from "@/hooks/use-fetch";
 import { authFetch } from "@/lib/auth-client";
 import { formatDate, formatMoney, toISODate } from "@/lib/constants";
 import type { Product, Purchase, Supplier } from "@/lib/types";
-import {
-  DraftItem,
-  ItemsEditor,
-  emptyItem,
-  itemToApi,
-} from "@/components/items-editor";
+import { DraftItem, emptyItem, itemToApi } from "@/components/items-editor";
+import { ProductCatalog } from "@/components/product-catalog";
+import { CartLines } from "@/components/cart-lines";
 import { buildPurchasePDF, openPDF } from "@/lib/pdf";
 
 interface FormState {
@@ -61,6 +63,16 @@ interface FormState {
   notes: string;
   updateStock: boolean;
   items: DraftItem[];
+}
+
+/** Ligne d'article entièrement vide et encore intacte (à remplacer au 1er ajout). */
+function isUntouchedLine(it: DraftItem): boolean {
+  return (
+    !it.productId &&
+    !it.productName.trim() &&
+    (Number(it.quantity) || 0) <= 1 &&
+    (Number(it.unitPrice) || 0) === 0
+  );
 }
 
 /** L'API renvoie aussi fileStored (nom interne du fichier stocké), absent du type Purchase. */
@@ -103,6 +115,43 @@ export function PurchasesView() {
       withFile: list.filter((p) => p.fileStored).length,
     };
   }, [purchases]);
+
+  /** Total du panier en cours de saisie. */
+  const formTotal = useMemo(
+    () =>
+      form.items.reduce(
+        (s, it) => s + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0),
+        0
+      ),
+    [form.items]
+  );
+  const itemCount = useMemo(
+    () =>
+      form.items.filter((it) => it.productName.trim() || (Number(it.quantity) || 0) > 0).length,
+    [form.items]
+  );
+
+  /* Ajout depuis le catalogue : incrémente si déjà présent, sinon nouvelle ligne (prix d'achat). */
+  const pickProduct = (product: Product) => {
+    const base = form.items.filter((it) => !isUntouchedLine(it));
+    const existing = base.findIndex((it) => it.productId === product.id);
+    if (existing >= 0) {
+      base[existing] = {
+        ...base[existing],
+        quantity: String((Number(base[existing].quantity) || 0) + 1),
+      };
+    } else {
+      base.push({
+        productId: product.id,
+        productName: product.name,
+        category: product.category,
+        unit: product.unit,
+        quantity: "1",
+        unitPrice: String(product.purchasePrice),
+      });
+    }
+    setForm((f) => ({ ...f, items: base }));
+  };
 
   const submit = async () => {
     if (!form.supplier.trim()) {
@@ -395,146 +444,237 @@ export function PurchasesView() {
         </CardContent>
       </Card>
 
-      {/* Page nouvel achat */}
+      {/* Page nouvel achat — design caisse (catalogue + panier) */}
       <PageOverlay
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         title="Nouvelle facture d'achat"
-        description="Enregistrez l'achat et joignez éventuellement le scan de la facture (PDF ou image)."
+        description="Touchez un produit du catalogue pour l'ajouter, ou saisissez un article libre."
+        maxWidth="max-w-7xl"
         actions={
           <>
+            <div className="hidden items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 sm:flex">
+              <span className="text-xs text-muted-foreground">Total</span>
+              <span className="text-sm font-bold tabular-nums text-primary">
+                {formatMoney(formTotal)}
+              </span>
+            </div>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Annuler
             </Button>
             <Button onClick={submit} disabled={saving} className="min-w-32">
-              {saving ? "Enregistrement…" : "Enregistrer"}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+              Enregistrer
             </Button>
           </>
         }
       >
-          <div className="grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="pu-supplier-dir">Fournisseur (répertoire)</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={form.supplierId || "free"}
-                    onValueChange={(v) => {
-                      const id = v === "free" ? "" : v;
-                      const found = (suppliers ?? []).find((s) => s.id === id);
-                      setForm((f) => ({
-                        ...f,
-                        supplierId: id,
-                        supplier: found ? found.name : "",
-                      }));
-                    }}
-                  >
-                    <SelectTrigger
-                      id="pu-supplier-dir"
-                      className="w-full"
-                      aria-label="Choisir un fournisseur du répertoire"
-                    >
-                      <SelectValue placeholder="— Fournisseur libre —" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-64">
-                      <SelectItem value="free">— Fournisseur libre —</SelectItem>
-                      {(suppliers ?? []).map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_440px]">
+          {/* Catalogue (à droite sur mobile : le formulaire d'abord) */}
+          <section className="order-2 min-w-0 lg:order-1" aria-label="Catalogue de produits">
+            <Card className="flex flex-col overflow-hidden lg:sticky lg:top-[68px] lg:h-[calc(100vh-96px)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <LayoutGrid className="h-4 w-4 text-primary" aria-hidden />
+                  Catalogue
+                  <span className="text-xs font-normal text-muted-foreground">
+                    — prix d&apos;achat ajouté au panier
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="min-h-0 flex-1 pb-3">
+                <ProductCatalog
+                  products={products ?? []}
+                  priceField="purchasePrice"
+                  onPick={pickProduct}
+                />
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Formulaire : fournisseur + panier + pièce jointe + notes */}
+          <section className="order-1 min-w-0 space-y-3 lg:order-2" aria-label="Facture d'achat">
+            {/* Fournisseur & date */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShoppingBag className="h-4 w-4 text-primary" aria-hidden />
+                  Fournisseur
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pu-supplier-dir">Répertoire</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={form.supplierId || "free"}
+                        onValueChange={(v) => {
+                          const id = v === "free" ? "" : v;
+                          const found = (suppliers ?? []).find((s) => s.id === id);
+                          setForm((f) => ({
+                            ...f,
+                            supplierId: id,
+                            supplier: found ? found.name : "",
+                          }));
+                        }}
+                      >
+                        <SelectTrigger
+                          id="pu-supplier-dir"
+                          className="w-full"
+                          aria-label="Choisir un fournisseur du répertoire"
+                        >
+                          <SelectValue placeholder="— Fournisseur libre —" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          <SelectItem value="free">— Fournisseur libre —</SelectItem>
+                          {(suppliers ?? []).map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 h-10 sm:h-9"
+                        onClick={() => {
+                          setNewSup({ name: "", phone: "" });
+                          setNewSupOpen(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span className="hidden sm:inline">Nouveau</span>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pu-date">Date d&apos;achat</Label>
+                    <Input
+                      id="pu-date"
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pu-supplier">Fournisseur (nom libre) *</Label>
+                  <Input
+                    id="pu-supplier"
+                    value={form.supplier}
+                    onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                    placeholder="Ex : SOTRA Import"
+                  />
+                  {form.supplierId && (
+                    <p className="text-xs text-muted-foreground">
+                      Fournisseur lié au répertoire — le nom est prérempli et modifiable.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Panier des articles achetés */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  <span className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4 text-primary" aria-hidden />
+                    Articles achetés ({itemCount})
+                  </span>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="shrink-0 h-11 sm:h-9"
-                    onClick={() => {
-                      setNewSup({ name: "", phone: "" });
-                      setNewSupOpen(true);
-                    }}
+                    className="h-8 gap-1"
+                    onClick={() => setForm({ ...form, items: [...form.items, emptyItem()] })}
+                    aria-label="Ajouter un article libre"
                   >
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Nouveau</span>
+                    <PenLine className="h-3.5 w-3.5" aria-hidden /> Libre
                   </Button>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pu-date">Date d&apos;achat</Label>
-                <Input
-                  id="pu-date"
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <CartLines
+                  items={form.items}
+                  onChange={(items) => setForm({ ...form, items })}
                 />
-              </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="pu-supplier">Fournisseur (nom libre) *</Label>
-              <Input
-                id="pu-supplier"
-                value={form.supplier}
-                onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                placeholder="Ex : SOTRA Import"
-              />
-              {form.supplierId && (
+                <div className="flex items-center justify-between rounded-lg bg-primary/5 px-3 py-2">
+                  <span className="text-sm font-bold">Total de l&apos;achat</span>
+                  <span className="text-lg font-bold tabular-nums text-primary">
+                    {formatMoney(formTotal)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="pu-stock"
+                    checked={form.updateStock}
+                    onCheckedChange={(v) => setForm({ ...form, updateStock: v === true })}
+                  />
+                  <Label htmlFor="pu-stock" className="font-normal text-sm">
+                    Incrémenter le stock des produits du catalogue
+                  </Label>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pièce jointe */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Paperclip className="h-4 w-4 text-primary" aria-hidden />
+                  Pièce jointe
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5">
+                <Input
+                  id="pu-file"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-sm file:text-secondary-foreground"
+                  aria-label="Facture scannée (PDF ou image, max 5 Mo)"
+                />
                 <p className="text-xs text-muted-foreground">
-                  Fournisseur lié au répertoire — le nom est prérempli et modifiable.
+                  Facture scannée — PDF ou image, max 5 Mo.
+                  {file ? ` Sélectionné : ${file.name} (${(file.size / 1024).toFixed(0)} Ko).` : ""}
                 </p>
+              </CardContent>
+            </Card>
+
+            {/* Notes */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  id="pu-notes"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  rows={2}
+                  placeholder="Conditions de règlement, livraison…"
+                />
+              </CardContent>
+            </Card>
+
+            {/* Bouton principal */}
+            <Button onClick={submit} disabled={saving} className="h-12 w-full text-base" size="lg">
+              {saving ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+              ) : (
+                <Save className="h-5 w-5" aria-hidden />
               )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Articles achetés</Label>
-              <ItemsEditor
-                items={form.items}
-                onChange={(items) => setForm({ ...form, items })}
-                products={products ?? []}
-                priceField="purchasePrice"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="pu-stock"
-                checked={form.updateStock}
-                onCheckedChange={(v) => setForm({ ...form, updateStock: v === true })}
-              />
-              <Label htmlFor="pu-stock" className="font-normal text-sm">
-                Incrémenter le stock des produits du catalogue
-              </Label>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="pu-file">Pièce jointe (facture scannée — PDF, image — max 5 Mo)</Label>
-              <Input
-                id="pu-file"
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-sm file:text-secondary-foreground"
-              />
-              {file && (
-                <p className="text-xs text-muted-foreground">
-                  {file.name} — {(file.size / 1024).toFixed(0)} Ko
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="pu-notes">Notes</Label>
-              <Textarea
-                id="pu-notes"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={2}
-                placeholder="Conditions de règlement, livraison…"
-              />
-            </div>
-          </div>
+              Enregistrer la facture d&apos;achat
+            </Button>
+          </section>
+        </div>
       </PageOverlay>
 
       {/* Page confirmation suppression */}

@@ -27,6 +27,7 @@ import {
   Loader2,
   PackagePlus,
   PenLine,
+  Plus,
   Save,
   ShoppingCart,
   Store,

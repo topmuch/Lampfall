@@ -808,3 +808,27 @@ Stage Summary:
 - ZÉRO modale restante : tous les formulaires, éditeurs, aperçus, historiques et confirmations s'ouvrent désormais en PAGE plein écran (pattern uniforme : en-tête collant + bouton Retour + actions « Annuler/Enregistrer » en haut à droite).
 - PageOverlay centralise scroll-lock, Échap (pile), animation et accessibilité (role=dialog aria-modal).
 - Suppression du code mort invoice-dialog.tsx ; aucun changement API/DB requis.
+
+---
+Task ID: redesign-facture-caisse
+Agent: Z.ai Code (main)
+Task: Refaire la page de création des factures (vente, proforma, commerçant, immo) et factures fournisseur avec un nouveau design plus facile (style caisse/POS)
+
+Work Log:
+- Créé src/components/product-catalog.tsx : catalogue visible type « caisse » — recherche instantanée, chips de filtrage par catégorie (avec comptes), grille de cartes produits cliquables (nom, catégorie, prix, badge stock/rupture), carte « Créer un produit » avec le terme recherché prérempli
+- Créé src/components/cart-lines.tsx : panier avec compteur de quantité −/+ par article, prix unitaire modifiable, total de ligne, suppression ; remplace le tableau ItemsEditor pour les factures
+- Réécrit src/components/invoice-editor.tsx (props inchangées → 4 écrans bénéficient automatiquement) :
+  * Desktop : 2 colonnes — catalogue sticky à gauche, facture (client, panier, totaux, paiement, crédit, notes) à droite
+  * Mobile : 2 onglets « Catalogue » / « Facture (n) » avec badge d'articles
+  * Un clic produit = ajout au panier (ou incrémente si déjà présent) ; la ligne vide intacte est remplacée au 1er ajout
+  * Totaux HT/TVA/TTC avec puces rapides 0 % / 18 % ; « Reste à payer » si paiement partiel
+  * Paiement en boutons segmentés (Non payé/Partiel/Payé), classement crédit inchangé, bouton « Enregistrer » collant + bouton principal en bas
+  * Créations rapides client/produit conservées (pages plein écran)
+- Adapté purchases-view.tsx (facture fournisseur) au même design : catalogue avec prix d'ACHAT, fournisseur (répertoire + nom libre), panier, pièce jointe, notes ; total en direct dans l'en-tête
+- Lint OK ; tests agent-browser : login admin → nouvelle facture vente (2 produits via cartes, stepper +, client saisi) → FV-2026-0008 créée avec articles exacts (vérifié API) ; proforma OK ; facture d'achat FA-2026-0004 créée (prix d'achat) ; vue mobile 390×844 OK (onglets + ajout + bascule) ; entrée Commerçant (classement verrouillé) OK
+- Base restaurée depuis backup/lampfall-db-20260924.db (11 factures, 24 produits, Ampoule=150), serveur relancé
+
+Stage Summary:
+- Nouvelle UX de création des factures : catalogue cliquable + panier à steppers, visibles simultanément sur desktop, 2 onglets sur mobile — plus de combobox ni de tableau à remplir
+- Fichiers : src/components/product-catalog.tsx (nouveau), src/components/cart-lines.tsx (nouveau), src/components/invoice-editor.tsx (réécrit), src/components/purchases-view.tsx (formulaire remplacé)
+- ItemsEditor conservé pour les commandes (orders-view) ; logique d'enregistrement/crédit inchangée
