@@ -772,3 +772,21 @@ Work Log:
 Stage Summary:
 - AUDIT GLOBAL : RAS — toutes les fonctionnalités testées fonctionnent (liens, boutons, génération PDF facture/proforma/bon de livraison/bon de commande/rapports/quittance ticket/historique, conversions, versements, CRUD, validations, responsive)
 - Application vérifiée de bout en bout sur les données de référence, prête pour Redeploy Coolify
+
+---
+Task ID: multi-products-pdf-harmonization
+Agent: Z.ai Code (principal)
+Task: Synchroniser GitHub ↔ local ; (1) permettre l'ajout de plusieurs produits dans Commande ; (2) harmoniser le PDF de commande sur le style des factures ; (3) harmoniser TOUS les PDF du système (police + taille) ; (4) bouton + pour ajouter des produits manuels dans Facture / Proforma / Commerçant / Immo / Fournisseur.
+
+Work Log:
+- Restauration sandbox : cp backup/lampfall-db-20260924.db → db/custom.db, db:push, redémarrage serveur (HTTP 200, 24 produits / 11 factures / 6 clients).
+- Analyse : ItemsEditor (partagé par facture, proforma, commerçant, immo, achats, commandes) démarrait avec UNE seule ligne manuelle et sans bouton d'ajout — cause racine des « un seul produit ».
+- items-editor.tsx : ajout du bouton « Ajouter une ligne » (Plus) qui appelle onChange([...items, emptyItem()]) + texte d'aide explicite ; un seul correctif couvre les 6 écrans.
+- pdf.ts : DEFAULT_FONT aligné sur INVOICE_FONT (Times italique, gras italique, ×1,25) — tous les documents partagent désormais la police des factures ; nouvelle constante module K = 1,25.
+- pdf.ts : remplacement des 39 doc.setFont("helvetica", …) codés en dur + mise à l'échelle ×1,25 de toutes les tailles (setFont, setFontSize, options autoTable font/fontStyle/fontSize) dans : commande, liste commandes, bon d'achat, liste factures, rapports (ventes, TVA, jour), bon de livraison, réappro, historique client, quittance loyer, échéancier. Zéro occurrence helvetica restante ; footer 7pt et filigrane 60pt inchangés (identiques aux factures).
+- Tests : lint 0 erreur ; commande CMD-2026-0004 créée via UI avec 3 produits (bouton +) puis supprimée ; facture FV-2026-0008 créée avec 2 articles manuels puis supprimée ; vérif PyMuPDF : commande / facture / bon de livraison rendus en Times-Italic & Times-BoldItalic aux mêmes tailles (17,5 / 24 / 13,8 / 10,6 pt) ; bouton + vérifié dans Factures, Achats et Commerçant ; dev.log sans erreur ; base restaurée à l'état de référence.
+
+Stage Summary:
+- Tous les écrans d'articles (facture VENTE, proforma, commerçant, immo, achats fournisseur, commandes) permettent désormais d'ajouter autant de lignes produits que voulu (bouton +).
+- PDF 100 % harmonisés : même police (Times italique), même gras italique, mêmes tailles ×1,25 que les factures sur les ~11 types de documents.
+- Aucune migration DB requise ; état de référence conservé (24 produits, 11 factures, 3 commandes, 6 clients).

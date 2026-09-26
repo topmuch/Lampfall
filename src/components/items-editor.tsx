@@ -176,14 +176,27 @@ export function ItemsEditor({
             </Command>
           </PopoverContent>
         </Popover>
-        <span className="text-xs text-muted-foreground">
-          ou saisissez un article libre ci-dessous
-        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange([...items, emptyItem()])}
+          disabled={disabled}
+          aria-label="Ajouter une ligne article vide"
+          className="h-10 gap-1.5"
+        >
+          <Plus className="h-4 w-4" aria-hidden />
+          Ajouter une ligne
+        </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Ajoutez autant d'articles que nécessaire : cherchez un produit du catalogue
+        ou saisissez un article libre, puis cliquez sur « Ajouter une ligne ».
+      </p>
 
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">
-          Aucun article. Recherchez un produit du catalogue ou saisissez un article libre.
+          Aucun article. Recherchez un produit du catalogue ou cliquez sur « Ajouter une ligne ».
         </p>
       ) : (
         <div className="rounded-md border overflow-x-auto">

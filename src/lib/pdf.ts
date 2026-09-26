@@ -186,8 +186,13 @@ export async function getLogoBase64(): Promise<string | null> {
 // `scale` grossit les textes du document (factures imprimées plus grandes — demande client).
 type FontStyle = "normal" | "italic" | "bold" | "bolditalic";
 type PdfFont = { name: string; normal: FontStyle; bold: FontStyle; scale?: number };
-const DEFAULT_FONT: PdfFont = { name: "helvetica", normal: "normal", bold: "bold" };
+// Harmonisation demandée par le client : TOUS les documents (commandes, bons de livraison,
+// achats, listes, rapports, quittances…) utilisent exactement la même police que les factures
+// — Times italique, gras italique pour les titres, taille ×1,25.
 const INVOICE_FONT: PdfFont = { name: "times", normal: "italic", bold: "bolditalic", scale: 1.25 };
+const DEFAULT_FONT: PdfFont = INVOICE_FONT;
+/** Facteur d'échelle global des tailles de police (identique aux factures). */
+const K = INVOICE_FONT.scale ?? 1;
 
 function drawHeader(
   doc: jsPDF,
@@ -555,19 +560,19 @@ export async function buildOrderPDF(order: Order): Promise<jsPDF> {
   drawHeader(doc, logo, "COMMANDE PRÉVISIONNELLE", `N° ${order.number}`);
 
   const blockY = 48;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text("CLIENT", 14, blockY);
-  doc.setFontSize(11);
+  doc.setFontSize(11 * K);
   doc.setTextColor(...DARK);
   const clientName = order.clientName || "Client comptoir";
   const nameLines = doc.splitTextToSize(clientName, 85);
   doc.text(nameLines, 14, blockY + 6);
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * K);
   const infoX = 128;
-  doc.setFont("helvetica", "normal");
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
   doc.setTextColor(...GRAY);
   doc.text("Date :", infoX, blockY);
   doc.text(fmtDate(order.date), 196, blockY, { align: "right" });
@@ -591,8 +596,8 @@ export async function buildOrderPDF(order: Order): Promise<jsPDF> {
   const tableEnd = drawItemsTable(doc, order.items, blockY + 20);
 
   let ty = tableEnd + 7;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(10 * K);
   doc.setTextColor(...GREEN);
   doc.text("MONTANT ESTIMÉ :", 122, ty);
   doc.text(fmtMoney(order.items.reduce((s, i) => s + i.total, 0)), 194, ty, {
@@ -600,14 +605,14 @@ export async function buildOrderPDF(order: Order): Promise<jsPDF> {
   });
 
   if (order.notes) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+    doc.setFontSize(8 * K);
     doc.setTextColor(...GRAY);
     doc.text(doc.splitTextToSize(`Notes : ${order.notes}`, 180), 14, ty + 8);
   }
 
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, "italic");
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     "Document prévisionnel — les quantités et prix restent susceptibles d'ajustement.",
@@ -647,24 +652,25 @@ export async function buildOrdersListPDF(orders: Order[]): Promise<jsPDF> {
     ],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 1.8, right: 2, bottom: 1.8, left: 2 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
-      0: { cellWidth: 26, fontStyle: "bold" },
+      0: { cellWidth: 26, fontStyle: INVOICE_FONT.bold },
       1: { cellWidth: 44 },
       2: { cellWidth: 20, halign: "center" },
       3: { cellWidth: 24, halign: "center" },
       4: { cellWidth: 22, halign: "center" },
       5: { cellWidth: 16, halign: "center" },
-      6: { halign: "right", fontStyle: "bold" },
+      6: { halign: "right", fontStyle: INVOICE_FONT.bold },
     },
     margin: { left: 14, right: 14 },
   });
@@ -682,17 +688,17 @@ export async function buildPurchasePDF(purchase: Purchase): Promise<jsPDF> {
   drawHeader(doc, logo, "BON D'ACHAT", `N° ${purchase.number}`);
 
   const blockY = 48;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text("FOURNISSEUR", 14, blockY);
-  doc.setFontSize(11);
+  doc.setFontSize(11 * K);
   doc.setTextColor(...DARK);
   doc.text(doc.splitTextToSize(purchase.supplier, 85), 14, blockY + 6);
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.5 * K);
   const infoX = 128;
-  doc.setFont("helvetica", "normal");
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
   doc.setTextColor(...GRAY);
   doc.text("Date :", infoX, blockY);
   doc.text(fmtDate(purchase.date), 196, blockY, { align: "right" });
@@ -705,15 +711,15 @@ export async function buildPurchasePDF(purchase: Purchase): Promise<jsPDF> {
   const tableEnd = drawItemsTable(doc, purchase.items, blockY + 20);
 
   let ty = tableEnd + 7;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(10 * K);
   doc.setTextColor(...GREEN);
   doc.text("TOTAL ACHAT :", 122, ty);
   doc.text(fmtMoney(purchase.total), 194, ty, { align: "right" });
 
   if (purchase.notes) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+    doc.setFontSize(8 * K);
     doc.setTextColor(...GRAY);
     doc.text(doc.splitTextToSize(`Notes : ${purchase.notes}`, 180), 14, ty + 8);
   }
@@ -748,23 +754,24 @@ export async function buildInvoiceListPDF(
     foot: [["TOTAL", "", "", "", "", fmtNum(invoices.reduce((s, f) => s + f.totalTTC, 0))]],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 1.8, right: 2, bottom: 1.8, left: 2 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
-      0: { cellWidth: 30, fontStyle: "bold" },
+      0: { cellWidth: 30, fontStyle: INVOICE_FONT.bold },
       1: { cellWidth: 22, halign: "center" },
       2: { cellWidth: 62 },
       3: { cellWidth: 22, halign: "center" },
       4: { cellWidth: 22, halign: "center" },
-      5: { halign: "right", fontStyle: "bold" },
+      5: { halign: "right", fontStyle: INVOICE_FONT.bold },
     },
     margin: { left: 14, right: 14 },
   });
@@ -777,8 +784,8 @@ export async function buildInvoiceListPDF(
 
 /** Titre de section (vert, souligné fin) — renvoie le Y de départ du contenu. */
 function sectionTitle(doc: jsPDF, text: string, y: number): number {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(10.5 * K);
   doc.setTextColor(...GREEN);
   doc.text(text.toUpperCase(), 14, y);
   doc.setDrawColor(...GREEN_LIGHT);
@@ -795,14 +802,15 @@ function lastTableY(doc: jsPDF, fallback: number): number {
 const REPORT_TABLE_STYLES = {
   theme: "grid" as const,
   styles: {
-    font: "helvetica",
-    fontSize: 8,
+    font: INVOICE_FONT.name,
+    fontStyle: INVOICE_FONT.normal,
+    fontSize: 8 * K,
     textColor: DARK as unknown as number[],
     lineColor: [210, 218, 213],
     lineWidth: 0.15,
     cellPadding: { top: 1.6, right: 2, bottom: 1.6, left: 2 },
   },
-  headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
+  headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
   alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
   margin: { left: 14, right: 14 },
 };
@@ -829,11 +837,11 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
     styles: {
       fillColor: GREEN_BG as unknown as number[],
       textColor: GREEN as unknown as number[],
-      fontStyle: "bold" as const,
+      fontStyle: INVOICE_FONT.bold,
       halign: "right" as const,
     },
   });
-  const valueCell = (t: string) => ({ content: t, styles: { fontStyle: "bold" as const, halign: "right" as const } });
+  const valueCell = (t: string) => ({ content: t, styles: { fontStyle: INVOICE_FONT.bold, halign: "right" as const } });
 
   autoTable(doc, {
     startY: 48,
@@ -860,8 +868,9 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
     ],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8.5,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8.5 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
@@ -875,8 +884,8 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
 
   // Ligne des statuts
   let y = lastTableY(doc, 48 + 16) + 6;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     `Payées : ${s.paidCount}    \u2022    Partielles : ${s.partialCount}    \u2022    Impayées : ${s.unpaidCount}    \u2022    Livrées : ${s.deliveredCount}    \u2022    Non livrées : ${s.notDeliveredCount}`,
@@ -905,12 +914,12 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
         fmtNum(report.monthly.reduce((a, m) => a + (m.total - m.paid), 0)),
       ]],
       ...REPORT_TABLE_STYLES,
-      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
       columnStyles: {
         0: { cellWidth: 50 },
         1: { halign: "right" },
         2: { halign: "right" },
-        3: { halign: "right", fontStyle: "bold" },
+        3: { halign: "right", fontStyle: INVOICE_FONT.bold },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
@@ -928,7 +937,7 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
       columnStyles: {
         0: { cellWidth: 110 },
         1: { cellWidth: 26, halign: "center" },
-        2: { halign: "right", fontStyle: "bold" },
+        2: { halign: "right", fontStyle: INVOICE_FONT.bold },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
@@ -947,7 +956,7 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
         0: { cellWidth: 92 },
         1: { cellWidth: 24, halign: "center" },
         2: { halign: "right" },
-        3: { halign: "right", fontStyle: "bold" },
+        3: { halign: "right", fontStyle: INVOICE_FONT.bold },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
@@ -968,12 +977,12 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
         fmtNum(report.topProducts.reduce((a, p) => a + p.margin, 0)),
       ]],
       ...REPORT_TABLE_STYLES,
-      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
       columnStyles: {
         0: { cellWidth: 92 },
         1: { cellWidth: 24, halign: "center" },
         2: { halign: "right" },
-        3: { halign: "right", fontStyle: "bold" },
+        3: { halign: "right", fontStyle: INVOICE_FONT.bold },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
@@ -996,14 +1005,14 @@ export async function buildSalesReportPDF(report: SalesReport, periodLabel: stri
       ]),
       foot: [["TOTAL", "", "", "", "", fmtNum(s.totalTTC)]],
       ...REPORT_TABLE_STYLES,
-      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+      footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
       columnStyles: {
-        0: { cellWidth: 30, fontStyle: "bold" },
+        0: { cellWidth: 30, fontStyle: INVOICE_FONT.bold },
         1: { cellWidth: 22, halign: "center" },
         2: { cellWidth: 62 },
         3: { cellWidth: 22, halign: "center" },
         4: { cellWidth: 22, halign: "center" },
-        5: { halign: "right", fontStyle: "bold" },
+        5: { halign: "right", fontStyle: INVOICE_FONT.bold },
       },
     });
   }
@@ -1022,15 +1031,15 @@ export async function buildDeliveryNotePDF(invoice: Invoice): Promise<jsPDF> {
 
   // Bloc client
   const blockY = 50;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text("CLIENT", 14, blockY);
-  doc.setFontSize(12);
+  doc.setFontSize(12 * K);
   doc.setTextColor(...DARK);
   doc.text(doc.splitTextToSize(invoice.clientName || "Client comptoir", 100), 14, blockY + 6);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
   doc.setTextColor(...GRAY);
   let cy = blockY + 6 + doc.splitTextToSize(invoice.clientName || "Client comptoir", 100).length * 5.5;
   if (invoice.clientPhone) {
@@ -1046,11 +1055,11 @@ export async function buildDeliveryNotePDF(invoice: Invoice): Promise<jsPDF> {
   doc.setDrawColor(...GREEN);
   doc.setFillColor(...GREEN_BG);
   doc.roundedRect(140, blockY - 4, 56, 20, 2, 2, "FD");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(9 * K);
   doc.setTextColor(...GREEN);
   doc.text("LIVRAISON", 168, blockY + 2, { align: "center" });
-  doc.setFontSize(8);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...DARK);
   doc.text(
     invoice.deliveryStatus === "LIVRE" ? "Marchandise livrée" : "En attente de livraison",
@@ -1067,19 +1076,20 @@ export async function buildDeliveryNotePDF(invoice: Invoice): Promise<jsPDF> {
     foot: [["TOTAL ARTICLES", fmtNum(invoice.items.reduce((s, it) => s + it.quantity, 0)), ""]],
     theme: "grid",
     styles: {
-      font: "helvetica",
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
       fontSize: 9,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
       0: { cellWidth: 110 },
-      1: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 30, halign: "center", fontStyle: INVOICE_FONT.bold },
       2: { cellWidth: 30, halign: "center" },
     },
     margin: { left: 14, right: 14 },
@@ -1087,8 +1097,8 @@ export async function buildDeliveryNotePDF(invoice: Invoice): Promise<jsPDF> {
 
   // Zone de signatures
   const ySig = Math.min(lastTableY(doc, cy + 60) + 30, 235);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(9 * K);
   doc.setTextColor(...DARK);
   doc.text("Livré par (ETS LAMP FALL)", 32, ySig, { align: "center" });
   doc.text("Reçu par (le client)", 148, ySig, { align: "center" });
@@ -1096,8 +1106,8 @@ export async function buildDeliveryNotePDF(invoice: Invoice): Promise<jsPDF> {
   doc.setLineWidth(0.25);
   doc.line(14, ySig + 22, 110, ySig + 22);
   doc.line(130, ySig + 22, 196, ySig + 22);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text("Nom, signature et cachet", 32, ySig + 26.5, { align: "center" });
   doc.text("Nom, signature et cachet", 148, ySig + 26.5, { align: "center" });
@@ -1130,20 +1140,21 @@ export async function buildVatReportPDF(report: SalesReport, periodLabel: string
     ]],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8.5,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8.5 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
       0: { cellWidth: 50 },
       1: { halign: "right" },
-      2: { halign: "right", fontStyle: "bold" },
+      2: { halign: "right", fontStyle: INVOICE_FONT.bold },
       3: { halign: "right" },
     },
     margin: { left: 14, right: 14 },
@@ -1169,15 +1180,15 @@ export async function buildVatReportPDF(report: SalesReport, periodLabel: string
         0: { cellWidth: 25, halign: "center" },
         1: { cellWidth: 45, halign: "center" },
         2: { halign: "right" },
-        3: { halign: "right", fontStyle: "bold" },
+        3: { halign: "right", fontStyle: INVOICE_FONT.bold },
       },
     });
     y = lastTableY(doc, y + 20) + 8;
   }
 
   // Mention légale
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     "État récapitulatif de la TVA collectée sur les ventes de la période — document interne d'aide à la déclaration.",
@@ -1215,29 +1226,30 @@ export async function buildRestockOrderPDF(products: Product[]): Promise<jsPDF> 
     foot: [["TOTAL", "", "", "", fmtNum(products.reduce((s, p) => s + Math.max(p.minStock * 2 - p.stock, p.minStock), 0))]],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8.5,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8.5 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
       0: { cellWidth: 62 },
       1: { cellWidth: 28 },
       2: { cellWidth: 24, halign: "center" },
       3: { cellWidth: 24, halign: "center" },
-      4: { halign: "center", fontStyle: "bold" },
+      4: { halign: "center", fontStyle: INVOICE_FONT.bold },
     },
     margin: { left: 14, right: 14 },
   });
 
   const y = lastTableY(doc, 50 + 30) + 8;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     "Quantités suggérées automatiquement (2 × le stock minimum), à ajuster selon les besoins réels.",
@@ -1247,8 +1259,8 @@ export async function buildRestockOrderPDF(products: Product[]): Promise<jsPDF> 
 
   // Signatures
   const ySig = Math.min(y + 20, 240);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(9 * K);
   doc.setTextColor(...DARK);
   doc.text("Établi par", 40, ySig, { align: "center" });
   doc.text("Validé par", 148, ySig, { align: "center" });
@@ -1474,19 +1486,19 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
     doc.setFillColor(...GREEN_BG);
     doc.roundedRect(kx, ky, boxW, boxH, 2, 2, "F");
     doc.setTextColor(...GRAY);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7 * K);
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
     doc.text(k.label.toUpperCase(), kx + boxW / 2, ky + 6, { align: "center" });
     doc.setTextColor(...(k.color as [number, number, number]));
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(k.value.length > 13 ? 8.5 : 10.5);
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+    doc.setFontSize((k.value.length > 13 ? 8.5 : 10.5) * K);
     doc.text(k.value, kx + boxW / 2, ky + 13, { align: "center" });
     kx += boxW + gap;
   }
 
   // Sous-ligne : statuts + proformas
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     `Payées : ${report.summary.paidCount}   •   Partielles : ${report.summary.partialCount}   •   Impayées : ${report.summary.unpaidCount}   •   Proformas du jour : ${report.summary.proformaCount}`,
@@ -1510,21 +1522,21 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
           ])
         : [["—", "Aucune facture ce jour", "", "", "", ""]],
     theme: "grid",
-    styles: { fontSize: 8, cellPadding: 2, textColor: DARK },
-    headStyles: { fillColor: [...GREEN], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    styles: { font: INVOICE_FONT.name, fontStyle: INVOICE_FONT.normal, fontSize: 8 * K, cellPadding: 2, textColor: DARK },
+    headStyles: { fillColor: [...GREEN], textColor: 255, fontStyle: INVOICE_FONT.bold, fontSize: 8 * K },
     alternateRowStyles: { fillColor: [...GREEN_BG] },
     columnStyles: {
       3: { halign: "right" },
       4: { halign: "right" },
-      0: { fontStyle: "bold" },
+      0: { fontStyle: INVOICE_FONT.bold },
     },
     margin: { left: 14, right: 14 },
   });
 
   // ─── Versements encaissés du jour ─────────────────────────────────────────
   let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(10 * K);
   doc.setTextColor(...GREEN);
   doc.text("Versements encaissés", 14, y);
   autoTable(doc, {
@@ -1541,8 +1553,8 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
           ])
         : [["—", "Aucun versement ce jour", "", "", ""]],
     theme: "grid",
-    styles: { fontSize: 8, cellPadding: 2, textColor: DARK },
-    headStyles: { fillColor: [...GREEN], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    styles: { font: INVOICE_FONT.name, fontStyle: INVOICE_FONT.normal, fontSize: 8 * K, cellPadding: 2, textColor: DARK },
+    headStyles: { fillColor: [...GREEN], textColor: 255, fontStyle: INVOICE_FONT.bold, fontSize: 8 * K },
     alternateRowStyles: { fillColor: [...GREEN_BG] },
     columnStyles: { 4: { halign: "right" } },
     margin: { left: 14, right: 14 },
@@ -1550,8 +1562,8 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
 
   // ─── Règlements des achats à crédit du jour ───────────────────────────────
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(10 * K);
   doc.setTextColor(...ORANGE);
   doc.text("Règlements crédit (Commerçant / Immo)", 14, y);
   autoTable(doc, {
@@ -1569,8 +1581,8 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
           ])
         : [["—", "Aucun règlement ce jour", "", "", "", ""]],
     theme: "grid",
-    styles: { fontSize: 8, cellPadding: 2, textColor: DARK },
-    headStyles: { fillColor: [...ORANGE], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    styles: { font: INVOICE_FONT.name, fontStyle: INVOICE_FONT.normal, fontSize: 8 * K, cellPadding: 2, textColor: DARK },
+    headStyles: { fillColor: [...ORANGE], textColor: 255, fontStyle: INVOICE_FONT.bold, fontSize: 8 * K },
     alternateRowStyles: { fillColor: [253, 246, 236] },
     columnStyles: { 5: { halign: "right" } },
     margin: { left: 14, right: 14 },
@@ -1582,18 +1594,18 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
   doc.setFillColor(...GREEN);
   doc.roundedRect(120, y - 5, 76, 12, 2, 2, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text("TOTAL ENCAISSÉ DU JOUR", 124, y + 2.5);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(9 * K);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.text("TOTAL ENCAISSÉ", 124, y + 2.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(11 * K);
   doc.text(fmtMoney(grandTotal), 192, y + 2.5, { align: "right" });
 
   // ─── Répartition par mode ─────────────────────────────────────────────────
   if (report.byMethod.length > 0) {
     doc.setTextColor(...GRAY);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+    doc.setFontSize(8.5 * K);
     const modes = report.byMethod
       .map((m) => `${m.label} : ${fmtMoney(m.amount)} (${m.count})`)
       .join("   •   ");
@@ -1603,7 +1615,7 @@ export async function buildDailyReportPDF(report: DailyReport): Promise<jsPDF> {
   }
 
   // Pied de page
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.5 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     `Édité le ${new Date().toLocaleString("fr-FR")} — ETS LAMP FALL`,
@@ -1633,15 +1645,15 @@ export async function buildClientHistoryPDF(
 
   // Bloc client
   const blockY = 50;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text("CLIENT", 14, blockY);
-  doc.setFontSize(12);
+  doc.setFontSize(12 * K);
   doc.setTextColor(...DARK);
   doc.text(doc.splitTextToSize(client.name, 100), 14, blockY + 6);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
   doc.setTextColor(...GRAY);
   let cy = blockY + 6 + doc.splitTextToSize(client.name, 100).length * 5.5;
   const details: string[] = [];
@@ -1658,15 +1670,15 @@ export async function buildClientHistoryPDF(
   const ventes = invoices.filter((f) => f.type === "VENTE");
   const totalVentes = ventes.reduce((s, f) => s + f.totalTTC, 0);
   const totalPaye = ventes.reduce((s, f) => s + f.amountPaid, 0);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9 * K);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
   doc.setTextColor(...GRAY);
   doc.text("Total facturé :", 196, blockY + 6, { align: "right" });
-  doc.setFont("helvetica", "bold");
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
   doc.setTextColor(...GREEN);
   doc.text(fmtMoney(totalVentes), 196, blockY + 12, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
   doc.setTextColor(...GRAY);
   doc.text("Total payé :", 196, blockY + 18, { align: "right" });
   doc.text(fmtMoney(totalPaye), 196, blockY + 22, { align: "right" });
@@ -1701,18 +1713,19 @@ export async function buildClientHistoryPDF(
     ],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 1.8, right: 2, bottom: 1.8, left: 2 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
-      0: { cellWidth: 32, fontStyle: "bold" },
+      0: { cellWidth: 32, fontStyle: INVOICE_FONT.bold },
       1: { cellWidth: 22, halign: "center" },
       2: { cellWidth: 26, halign: "center" },
       3: { cellWidth: 32, halign: "right" },
@@ -1743,15 +1756,15 @@ export async function buildRentReceiptPDF(tenant: Tenant, rent: Rent): Promise<j
   if (!paid) watermark(doc, "NON PAYÉ", [220, 190, 190]);
 
   const blockY = 55;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text("LOCATAIRE", 14, blockY);
-  doc.setFontSize(12);
+  doc.setFontSize(12 * K);
   doc.setTextColor(...DARK);
   doc.text(doc.splitTextToSize(tenant.name, 90), 14, blockY + 6);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(9 * K);
   doc.setTextColor(...GRAY);
   let cy = blockY + 6 + doc.splitTextToSize(tenant.name, 90).length * 5.5;
   const infos = [
@@ -1768,28 +1781,28 @@ export async function buildRentReceiptPDF(tenant: Tenant, rent: Rent): Promise<j
   doc.setDrawColor(...GREEN);
   doc.setLineWidth(0.5);
   doc.roundedRect(110, blockY - 2, 86, 34, 2, 2, "S");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
   doc.text("Mois concerné :", 114, blockY + 4);
   doc.text("Loyer mensuel :", 114, blockY + 11);
   doc.text("Statut :", 114, blockY + 18);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(9.5 * K);
   doc.setTextColor(...DARK);
   doc.text(monthLabel(rent.month), 194, blockY + 4, { align: "right" });
   doc.text(fmtMoney(rent.amount), 194, blockY + 11, { align: "right" });
   doc.setTextColor(...(paid ? GREEN : RED));
   doc.text(RENT_STATUS_LABELS[rent.status] ?? rent.status, 194, blockY + 18, { align: "right" });
   if (paid && rent.paidAt) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+    doc.setFontSize(7.5 * K);
     doc.setTextColor(...GRAY);
     doc.text(`Réglé le ${fmtDate(rent.paidAt)}`, 194, blockY + 24, { align: "right" });
   }
 
   // Montant en lettres
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(8.5);
+  doc.setFont(INVOICE_FONT.name, "italic");
+  doc.setFontSize(8.5 * K);
   doc.setTextColor(...DARK);
   doc.text(
     doc.splitTextToSize(
@@ -1804,8 +1817,8 @@ export async function buildRentReceiptPDF(tenant: Tenant, rent: Rent): Promise<j
 
   // Signature
   const sy = cy + 26;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8 * K);
   doc.setTextColor(...GRAY);
   doc.text(
     paid ? "Cachet et signature du bailleur :" : "Cachet et signature du locataire :",
@@ -1853,18 +1866,19 @@ export async function buildTenantRentsPDF(tenant: Tenant): Promise<jsPDF> {
     ],
     theme: "grid",
     styles: {
-      font: "helvetica",
-      fontSize: 8.5,
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8.5 * K,
       textColor: DARK as unknown as number[],
       lineColor: [210, 218, 213],
       lineWidth: 0.15,
       cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 },
     },
-    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: "bold" },
-    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: "bold" },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
     columnStyles: {
-      0: { cellWidth: 60, fontStyle: "bold" },
+      0: { cellWidth: 60, fontStyle: INVOICE_FONT.bold },
       1: { cellWidth: 45, halign: "right" },
       2: { cellWidth: 35, halign: "center" },
       3: { halign: "center" },
