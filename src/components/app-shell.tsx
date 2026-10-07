@@ -15,6 +15,7 @@ import {
   Building2,
   ChevronDown,
   ClipboardList,
+  FileSearch,
   FileSignature,
   FileText,
   History,
@@ -36,6 +37,7 @@ import { CategoriesProvider } from "@/components/categories-provider";
 import { DashboardView } from "@/components/dashboard-view";
 import { InvoicesView } from "@/components/invoices-view";
 import { ClientsView } from "@/components/clients-view";
+import { SituationClientView } from "@/components/situation-client-view";
 import { ProductsView } from "@/components/products-view";
 import { PurchasesView } from "@/components/purchases-view";
 import { OrdersView } from "@/components/orders-view";
@@ -60,6 +62,7 @@ type ViewId =
   | "proforma"
   | "commandes"
   | "clients"
+  | "situation"
   | "rapports"
   | "achats"
   | "fournisseurs"
@@ -87,6 +90,7 @@ const NAV: {
   { id: "proforma", label: "Factures proforma", short: "Proforma", icon: FileSignature, section: "Ventes" },
   { id: "commandes", label: "Commandes prévisionnelles", short: "Commandes", icon: ClipboardList, section: "Ventes" },
   { id: "clients", label: "Clients", short: "Clients", icon: Users2, section: "Ventes" },
+  { id: "situation", label: "Situation client", short: "Situation", icon: FileSearch, section: "Ventes" },
   // ─── Crédits (achats à crédit) ───
   { id: "commercant", label: "Commerçant — Achats à crédit", short: "Commerçant", icon: Store, section: "Crédits" },
   { id: "immo", label: "Immo — Achats à crédit", short: "Immo", icon: Building2, section: "Crédits" },
@@ -477,6 +481,7 @@ export function AppShell() {
               {view === "fournisseurs" && <SuppliersView />}
               {view === "commercant" && <CreditPurchasesView destination="COMMERCANT" />}
               {view === "clients" && <ClientsView />}
+              {view === "situation" && <SituationClientView />}
               {view === "rapports" && <ReportsView />}
               {view === "produits" && <ProductsView />}
               {view === "mouvements" && <StockMovementsView />}
@@ -495,6 +500,7 @@ export function AppShell() {
           <p className="font-semibold text-sidebar-foreground">
             © {new Date().getFullYear()} {companyName}
             {companyTagline ? ` — ${companyTagline}` : ""}
+            <BuildBadge />
           </p>
           <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5">
             {settings?.adresse && <span>{settings.adresse}</span>}
@@ -533,5 +539,27 @@ function RestrictedCard() {
         Votre rôle d&apos;employé ne permet pas d&apos;accéder à cette section. Contactez l&apos;administrateur de la société.
       </p>
     </div>
+  );
+}
+
+/* ─── Trace de build (visible en pied de page en production) ───────────────
+ * Le Dockerfile génère public/build-id.txt à chaque construction de l'image
+ * (hash du commit + date UTC). Si le fichier existe, on l'affiche — permet
+ * de vérifier d'un coup d'œil qu'un déploiement a bien pris effet.
+ * En développement local, le fichier n'existe pas → badge masqué.
+ * ────────────────────────────────────────────────────────────────────────── */
+function BuildBadge() {
+  const [info, setInfo] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/build-id.txt")
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error("absent"))))
+      .then((t) => setInfo(t.trim()))
+      .catch(() => setInfo(null));
+  }, []);
+  if (!info) return null;
+  return (
+    <span className="ml-2 font-normal text-[10px] opacity-60" title="Version déployée">
+      · Build {info}
+    </span>
   );
 }

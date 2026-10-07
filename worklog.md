@@ -848,3 +848,26 @@ Stage Summary:
 - L'UI de création des factures/factures d'achat est revenue à l'état addc2c8 (modales → pages conservées, multi-lignes « + » conservées, PDF harmonisés conservés)
 - Seul le design « caisse » (catalogue cliquable + panier steppers) a été retiré ; aucune autre fonctionnalité affectée
 - Commands testées et fonctionnelles après restauration
+
+---
+Task ID: situation-client
+Agent: Z.ai Code (main)
+Task: Créer un onglet « Situation client » (recherche client → relevé des factures VENTE → PDF) + transformer les barres de recherche des écrans de création en champs toujours visibles (le client ne voyait pas la recherche au déploiement)
+
+Work Log:
+- Diagnostiqué « ya rien après déploiement » : l'ancienne SearchSelect était un combobox-bouton (popover) visuellement identique à l'ancienne liste déroulante → invisible comme changement
+- Réécrit src/components/person-search-select.tsx : VRAIE barre de recherche toujours visible (input avec loupe + croix d'effacement), liste déroulante de résultats en direct (nom + téléphone, insensible casse/accents), puce de sélection avec croix pour désélectionner, navigation clavier (↑↓ Entrée Échap), fermeture au clic extérieur — même API de props, les 3 usages existants (facture/proforma, commandes, achats) en profitent sans modification
+- Créé src/components/situation-client-view.tsx (nouvel onglet « Situation client », section Ventes) : recherche client → synthèse (nb factures VENTE, total facturé, total payé, reste à payer + nb non livrées) → tableau Date | N° facture | Entreprise | Montant TTC | Reste à payer | Paiement | Livraison avec aperçu PDF par ligne
+- Option A confirmée par le client : seules les factures VENTE comptent (proformas exclues)
+- Ajouté buildSituationClientPDF dans src/lib/pdf.ts : en-tête société + « SITUATION CLIENT », bloc client, totaux (facturé/payé/reste en rouge si > 0), tableau chronologique avec colonnes demandées + ligne TOTAL + mention « Situation établie le … »
+- Ajouté trace de build : Dockerfile génère public/build-id.txt (hash commit + date UTC) → badge « Build … » dans le footer de l'app pour vérifier d'un coup d'œil qu'un déploiement a pris effet
+- Scripts : scripts/seed-situation-demo.mjs (5 factures VENTE + 1 proforma de démo pour Alioune Sow), scripts/verify-search-select.mjs réécrit (nouveau DOM) + section Situation client (recherche, exclusion proforma, téléchargement PDF), scripts/inspect-db.mjs, scripts/debug-page.mjs
+- Corrigé le chargement local du standalone (sortie imbriquée .next/standalone/lampfall/ car le dossier parent a un package.json : copie des statiques au bon niveau)
+- Lint : 0 erreur (corrigé react-hooks/set-state-in-effect via réinitialisation de state dérivé au rendu)
+- Tests Playwright : 41/41 OK — recherche visible sur les 6 écrans, filtrage, puce de sélection, pré-remplissage, situation client complète (5 factures listées, proforma exclue, PDF Situation-Alioune-Sow.pdf généré)
+
+Stage Summary:
+- Nouvel onglet « Situation client » opérationnel : recherche « Senhotel-like » → situation complète → PDF officiel prêt à envoyer
+- Les barres de recherche client/fournisseur des écrans de création sont désormais des champs toujours visibles (impossible de les rater)
+- Badge « Build » ajouté en pied de page : après le prochain déploiement Coolify, le hash + date doivent changer — sinon le déploiement n'a pas pris le nouveau code
+- Fichiers : person-search-select.tsx (réécrit), situation-client-view.tsx (nouveau), app-shell.tsx (onglet + BuildBadge), pdf.ts (+buildSituationClientPDF), Dockerfile (build-id), verify-search-select.mjs (réécrit), seed-situation-demo.mjs (nouveau)

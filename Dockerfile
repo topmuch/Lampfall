@@ -22,6 +22,13 @@ RUN if [ ! -f package.json ]; then \
       rm -rf /tmp/lampfall-repo ; \
     fi
 
+# Trace de build : hash court du dépôt + date UTC, écrits dans un fichier
+# statique affiché en pied de page de l'application (badge « Build … »).
+# Permet de vérifier d'un coup d'œil qu'un déploiement a bien pris effet.
+RUN mkdir -p public && \
+    echo "$(git rev-parse --short HEAD 2>/dev/null || echo inconnu) $(date -u '+%d/%m/%Y %H:%M') UTC" \
+    > public/build-id.txt
+
 # Installation des dépendances (bun.lock copié pour un cache de couches efficace)
 RUN bun install
 

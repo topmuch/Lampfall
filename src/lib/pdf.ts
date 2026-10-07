@@ -1739,6 +1739,141 @@ export async function buildClientHistoryPDF(
   return doc;
 }
 
+// ─── Situation client (relevé de compte) ────────────────────────────────
+// Relevé par client : une ligne par facture VENTE avec date, numéro,
+// entreprise, montant TTC, reste à payer et statut de livraison —
+// imprimable et transmissible au client.
+
+export async function buildSituationClientPDF(
+  client: Client,
+  invoices: Invoice[]
+): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await getLogoBase64();
+
+  drawHeader(
+    doc,
+    logo,
+    "SITUATION CLIENT",
+    invoices.length > 0 ? `${invoices.length} facture(s)` : "Aucune facture"
+  );
+
+  // Bloc client
+  const blockY = 50;
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setFontSize(8 * K);
+  doc.setTextColor(...GRAY);
+  doc.text("CLIENT", 14, blockY);
+  doc.setFontSize(12 * K);
+  doc.setTextColor(...DARK);
+  doc.text(doc.splitTextToSize(client.name, 100), 14, blockY + 6);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
+  doc.setTextColor(...GRAY);
+  let cy = blockY + 6 + doc.splitTextToSize(client.name, 100).length * 5.5;
+  const details: string[] = [];
+  if (client.type) details.push(client.type === "ENTREPRISE" ? "Entreprise" : "Particulier");
+  if (client.phone) details.push(`Tél : ${client.phone}`);
+  if (client.email) details.push(client.email);
+  if (client.address) details.push(client.address);
+  for (const d of details) {
+    doc.text(d, 14, cy);
+    cy += 4.5;
+  }
+
+  // Totaux à droite
+  const totalFacture = invoices.reduce((s, f) => s + f.totalTTC, 0);
+  const totalPaye = invoices.reduce((s, f) => s + f.amountPaid, 0);
+  const totalReste = invoices.reduce(
+    (s, f) => s + Math.max(0, f.totalTTC - f.amountPaid),
+    0
+  );
+  doc.setFontSize(9 * K);
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setTextColor(...GRAY);
+  doc.text("Total facturé :", 196, blockY + 6, { align: "right" });
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.bold);
+  doc.setTextColor(...GREEN);
+  doc.text(fmtMoney(totalFacture), 196, blockY + 12, { align: "right" });
+  doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+  doc.setFontSize(8.5 * K);
+  doc.setTextColor(...GRAY);
+  doc.text("Total payé :", 196, blockY + 18, { align: "right" });
+  doc.text(fmtMoney(totalPaye), 196, blockY + 22, { align: "right" });
+  doc.text("Reste à payer :", 196, blockY + 27, { align: "right" });
+  doc.setTextColor(...(totalReste > 0 ? RED : GREEN));
+  doc.text(fmtMoney(totalReste), 196, blockY + 31, { align: "right" });
+  doc.setTextColor(...GRAY);
+
+  // Tableau des factures (ordre chronologique : du plus ancien au plus récent)
+  const tableStartY = Math.max(cy, blockY + 36) + 4;
+  const sorted = [...invoices].sort((a, b) => {
+    const da = new Date(a.date).getTime() || 0;
+    const db = new Date(b.date).getTime() || 0;
+    return da - db;
+  });
+  autoTable(doc, {
+    startY: tableStartY,
+    head: [["Date", "N° Facture", "Entreprise", "Montant TTC", "Reste à payer", "Livraison"]],
+    body: sorted.map((f) => [
+      fmtDate(f.date),
+      f.number,
+      f.clientName || client.name,
+      fmtNum(f.totalTTC),
+      fmtNum(Math.max(0, f.totalTTC - f.amountPaid)),
+      DELIVERY_LABELS[f.deliveryStatus] ?? f.deliveryStatus,
+    ]),
+    foot: [
+      [
+        "TOTAL",
+        "",
+        "",
+        fmtNum(totalFacture),
+        fmtNum(totalReste),
+        "",
+      ],
+    ],
+    theme: "grid",
+    styles: {
+      font: INVOICE_FONT.name,
+      fontStyle: INVOICE_FONT.normal,
+      fontSize: 8 * K,
+      textColor: DARK as unknown as number[],
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
+      cellPadding: { top: 1.8, right: 2, bottom: 1.8, left: 2 },
+    },
+    headStyles: { fillColor: GREEN as unknown as number[], textColor: [255, 255, 255], fontStyle: INVOICE_FONT.bold },
+    footStyles: { fillColor: GREEN_BG as unknown as number[], textColor: GREEN as unknown as number[], fontStyle: INVOICE_FONT.bold },
+    alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
+    columnStyles: {
+      0: { cellWidth: 24, halign: "center" },
+      1: { cellWidth: 30, fontStyle: INVOICE_FONT.bold },
+      2: { cellWidth: 46 },
+      3: { cellWidth: 30, halign: "right" },
+      4: { cellWidth: 30, halign: "right", fontStyle: INVOICE_FONT.bold },
+      5: { halign: "center" },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  // Mention de bas de tableau : date d'édition de la situation
+  const endY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY;
+  if (endY) {
+    doc.setFont(INVOICE_FONT.name, INVOICE_FONT.normal);
+    doc.setFontSize(7.5 * K);
+    doc.setTextColor(...GRAY);
+    doc.text(
+      `Situation établie le ${fmtDate(new Date().toISOString())} — montants en francs CFA (FCFA).`,
+      14,
+      endY + 8
+    );
+  }
+
+  drawFooter(doc);
+  return doc;
+}
+
 // ─── Immobilier : quittance de loyer ────────────────────────────────────
 
 export async function buildRentReceiptPDF(tenant: Tenant, rent: Rent): Promise<jsPDF> {

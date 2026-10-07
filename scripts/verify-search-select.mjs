@@ -1,10 +1,12 @@
 /**
- * Vérification Playwright — barre de recherche client/fournisseur
+ * Vérification Playwright — barres de recherche client/fournisseur
  * sur les onglets Facture, Proforma, Commandes, Commerçant, Immo, Achats
- * (+ présence de la recherche sur Fournisseurs).
+ * (+ recherche du répertoire sur Fournisseurs) + onglet « Situation client »
+ * (recherche client, tableau des factures VENTE, génération PDF).
  *
  * Prérequis : serveur standalone démarré sur PORT, base seedée
- * (admin/admin123 + clients/fournisseurs de démonstration).
+ * (admin/admin123 + clients/fournisseurs de démonstration
+ * + scripts/seed-situation-demo.mjs pour les factures d'Alioune Sow).
  */
 import { chromium } from "playwright";
 
@@ -17,6 +19,11 @@ function check(name, cond) {
   else { fail++; console.log(`  ❌ ${name}`); }
 }
 
+/**
+ * La barre de recherche est un VRAI champ de saisie toujours visible :
+ * on vérifie sa présence, on tape dedans, la liste déroulante filtre en
+ * direct, la sélection affiche une puce et pré-remplit le champ Nom.
+ */
 async function openCreateAndSearch(page, { navTitle, createLabel, triggerAria, searchPlaceholder, searchTerm, expectedName, nameInputId, shot }) {
   // Navigation via la sidebar (bouton avec title = label complet)
   await page.locator(`nav[aria-label="Navigation principale"] button[title="${navTitle}"]`).click();
@@ -27,31 +34,27 @@ async function openCreateAndSearch(page, { navTitle, createLabel, triggerAria, s
   await createBtn.click();
   await page.waitForTimeout(400);
 
-  // La barre de recherche (combobox) est visible avec son placeholder
-  const trigger = page.locator(`button[aria-label="${triggerAria}"]`).first();
-  check(`[${navTitle}] combobox visible`, await trigger.isVisible());
-  const btnText = await trigger.textContent();
-  check(`[${navTitle}] placeholder « libre » affiché`, btnText.includes("libre"));
+  // La barre de recherche est un champ toujours visible (pas un bouton)
+  const searchInput = page.locator(`input[role="combobox"][aria-label="${triggerAria}"]`).first();
+  check(`[${navTitle}] barre de recherche toujours visible`, await searchInput.isVisible());
+  const ph = await searchInput.getAttribute("placeholder");
+  check(`[${navTitle}] placeholder de recherche affiché`, ph === searchPlaceholder);
 
-  // Ouvrir → champ de recherche filtrant
-  await trigger.click();
-  const searchInput = page.locator(`input[placeholder="${searchPlaceholder}"]`);
-  check(`[${navTitle}] champ de recherche ouvert`, await searchInput.isVisible());
-
-  // Taper un terme : la liste se filtre (l'item attendu apparaît)
+  // Taper un terme : la liste se filtre en direct (l'item attendu apparaît)
+  await searchInput.click();
   await searchInput.fill(searchTerm);
   await page.waitForTimeout(350);
-  const options = page.locator('[cmdk-item]:visible');
+  const options = page.locator('[role="listbox"] button[role="option"]:visible');
   const target = options.filter({ hasText: expectedName });
   const nTarget = await target.count();
   check(`[${navTitle}] filtrage actif (« ${searchTerm} » → « ${expectedName} » trouvé)`, nTarget === 1);
   await page.screenshot({ path: `${OUT}/${shot}`, fullPage: false });
 
-  // Sélectionner le résultat attendu
+  // Sélectionner le résultat attendu → puce de sélection affichée
   await target.first().click();
   await page.waitForTimeout(350);
-  const afterText = await page.locator(`button[aria-label="${triggerAria}"]`).first().textContent();
-  check(`[${navTitle}] nom sélectionné affiché dans le bouton`, afterText.includes(expectedName));
+  const chip = page.locator('button[aria-label="Désélectionner"]').first();
+  check(`[${navTitle}] puce de sélection affichée`, await chip.isVisible());
 
   // Dans l'éditeur de facture/commande, le champ Nom du client est pré-rempli
   if (nameInputId) {
@@ -135,6 +138,51 @@ async function main() {
   const cellVisible = await page.getByText("SENELEC", { exact: false }).first().isVisible().catch(() => false);
   check("[Fournisseurs] filtrage du répertoire actif", cellVisible);
   await page.screenshot({ path: `${OUT}/search-fournisseurs.png` });
+
+  // ── Situation client ───────────────────────────────────────────────────
+  console.log("── Onglet Situation client ──");
+  await page.locator('nav[aria-label="Navigation principale"] button[title="Situation client"]').click();
+  await page.waitForTimeout(500);
+
+  const sitSearch = page.locator('input[role="combobox"][aria-label="Rechercher un client"]');
+  check("[Situation] barre de recherche client visible", await sitSearch.isVisible());
+
+  // État vide avant sélection
+  check("[Situation] état vide « Aucun client sélectionné »",
+    await page.getByText("Aucun client sélectionné").isVisible());
+
+  // Recherche « senhotel-like » : taper « ali » → Alioune Sow
+  await sitSearch.fill("ali");
+  await page.waitForTimeout(350);
+  const sitTarget = page.locator('[role="listbox"] button[role="option"]:visible').filter({ hasText: "Alioune Sow" });
+  check("[Situation] recherche « ali » → Alioune Sow trouvé", await sitTarget.count() === 1);
+  await sitTarget.first().click();
+  await page.waitForTimeout(700); // chargement /api/invoices?clientId=
+
+  // Synthèse des montants
+  check("[Situation] carte « Total facturé » visible", await page.getByText("Total facturé").first().isVisible());
+  check("[Situation] carte « Reste à payer » visible", await page.getByText("Reste à payer").first().isVisible());
+
+  // Tableau : 5 factures VENTE attendues (la PROFORMA PF-…-9006 doit être exclue)
+  const rows = page.locator('table tbody tr');
+  const nRows = await rows.count();
+  check(`[Situation] 5 factures VENTE listées (obtenu : ${nRows})`, nRows === 5);
+  const bodyText = await page.locator('table').textContent();
+  check("[Situation] proforma PF-2026-9006 exclue (Option A)", !bodyText.includes("PF-2026-9006"));
+  check("[Situation] colonnes attendues présentes",
+    bodyText.includes("N° facture") && bodyText.includes("Entreprise") && bodyText.includes("Montant TTC") && bodyText.includes("Livraison"));
+
+  await page.screenshot({ path: `${OUT}/situation-client.png`, fullPage: true });
+
+  // Génération du PDF « Situation client »
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 15000 }),
+    page.getByRole("button", { name: /Générer le PDF/ }).click(),
+  ]);
+  const pdfName = download.suggestedFilename();
+  check(`[Situation] PDF généré : ${pdfName}`, pdfName.startsWith("Situation-") && pdfName.endsWith(".pdf"));
+  await download.saveAs(`${OUT}/${pdfName}`);
+  check("[Situation] PDF téléchargeable sur le disque", await download.path() !== undefined);
 
   await browser.close();
   console.log(`\n════════ RÉSULTAT : ${ok} OK / ${fail} KO ════════`);
