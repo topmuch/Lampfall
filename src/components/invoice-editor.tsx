@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { PageOverlay } from "@/components/page-overlay";
+import { SearchSelect } from "@/components/person-search-select";
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORY_LABELS, formatMoney, PRODUCT_CATEGORIES, toISODate } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -756,18 +757,28 @@ export function InvoiceEditor({
             <CardContent className="grid gap-3">
               <div className="space-y-1.5">
                 <Label>Client existant</Label>
-                <Select value={form.clientId} onValueChange={onClientChange}>
-                  <SelectTrigger aria-label="Choisir un client existant">
-                    <SelectValue placeholder="— Client libre / comptoir —" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {localClients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Barre de recherche client : filtre en direct (nom, téléphone),
+                    insensible à la casse/accents — la liste déroulante plate
+                    devenait inutilisable avec beaucoup de clients. */}
+                <SearchSelect
+                  items={localClients.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    hint: c.phone ?? undefined,
+                  }))}
+                  value={form.clientId}
+                  onChange={onClientChange}
+                  ariaLabel="Rechercher un client existant"
+                  placeholder="— Client libre / comptoir —"
+                  searchPlaceholder="Nom ou téléphone du client…"
+                  emptyMessage="Aucun client trouvé"
+                  freeOption={{ value: "", label: "— Client libre / comptoir —" }}
+                  createAction={{
+                    label: "Créer un client",
+                    icon: "user",
+                    onSelect: () => setClientDialog(true),
+                  }}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="inv-name">Nom du client</Label>

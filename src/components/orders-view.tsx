@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmPage, PageOverlay } from "@/components/page-overlay";
+import { SearchSelect } from "@/components/person-search-select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -445,18 +446,22 @@ export function OrdersView() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Client existant</Label>
-                <Select value={form.clientId} onValueChange={onClientChange}>
-                  <SelectTrigger aria-label="Choisir un client">
-                    <SelectValue placeholder="— Client libre —" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {clients?.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Barre de recherche client : filtre en direct (nom, téléphone),
+                    insensible à la casse/accents — voir person-search-select.tsx. */}
+                <SearchSelect
+                  items={(clients ?? []).map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    hint: c.phone ?? undefined,
+                  }))}
+                  value={form.clientId}
+                  onChange={onClientChange}
+                  ariaLabel="Rechercher un client"
+                  placeholder="— Client libre —"
+                  searchPlaceholder="Nom ou téléphone du client…"
+                  emptyMessage="Aucun client trouvé"
+                  freeOption={{ value: "", label: "— Client libre —" }}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="o-name">Nom du client</Label>

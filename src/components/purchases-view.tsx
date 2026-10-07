@@ -23,13 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchSelect } from "@/components/person-search-select";
 import {
   Download,
   Eye,
@@ -417,10 +411,16 @@ export function PurchasesView() {
               <div className="space-y-1.5">
                 <Label htmlFor="pu-supplier-dir">Fournisseur (répertoire)</Label>
                 <div className="flex gap-2">
-                  <Select
-                    value={form.supplierId || "free"}
-                    onValueChange={(v) => {
-                      const id = v === "free" ? "" : v;
+                  {/* Barre de recherche fournisseur : filtre en direct (nom, téléphone),
+                      insensible à la casse/accents — voir person-search-select.tsx. */}
+                  <SearchSelect
+                    items={(suppliers ?? []).map((s) => ({
+                      id: s.id,
+                      name: s.name,
+                      hint: s.phone ?? undefined,
+                    }))}
+                    value={form.supplierId}
+                    onChange={(id) => {
                       const found = (suppliers ?? []).find((s) => s.id === id);
                       setForm((f) => ({
                         ...f,
@@ -428,23 +428,12 @@ export function PurchasesView() {
                         supplier: found ? found.name : "",
                       }));
                     }}
-                  >
-                    <SelectTrigger
-                      id="pu-supplier-dir"
-                      className="w-full"
-                      aria-label="Choisir un fournisseur du répertoire"
-                    >
-                      <SelectValue placeholder="— Fournisseur libre —" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-64">
-                      <SelectItem value="free">— Fournisseur libre —</SelectItem>
-                      {(suppliers ?? []).map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    ariaLabel="Rechercher un fournisseur du répertoire"
+                    placeholder="— Fournisseur libre —"
+                    searchPlaceholder="Nom ou téléphone du fournisseur…"
+                    emptyMessage="Aucun fournisseur trouvé"
+                    freeOption={{ value: "", label: "— Fournisseur libre —" }}
+                  />
                   <Button
                     type="button"
                     variant="outline"
