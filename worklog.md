@@ -121,3 +121,34 @@ Stage Summary:
 - Both tabs have distinct visual identity with different colors and bold typography
 - Excel export works for both tabs
 - API verified: 3 deposits, Total déposé: 450,000 FCFA, Total retiré: 130,000 FCFA
+---
+Task ID: 2
+Agent: main
+Task: Add search form, PDF reports for deposits and withdrawals (daily/weekly/monthly/yearly)
+
+Work Log:
+- Created src/lib/pdf-reports.ts: shared PDF generation utility using jspdf + jspdf-autotable
+  - Period types: jour, semaine, mois, annee with periodStart/periodEnd calculations
+  - generateDepositsPdf(): landscape A4, green header, table with client/date/amount/status
+  - generateWithdrawalsPdf(): landscape A4, amberF header, table with client/date/amount/note
+  - Both include stats summary, proper formatting, and auto-download
+- Updated deposits-clients-view.tsx:
+  - Added search form: text search (name/phone/notes) + date range (from/to) + reset
+  - Added PDF report dropdown: Journalier, Hebdomadaire, Mensuel, Annuel
+  - Used DropdownMenu for period selection
+  - Search filters apply to the deposit list
+- Updated retraits-clients-view.tsx:
+  - Enhanced existing search with date range (from/to) + reset button
+  - Added PDF report dropdown: Journalier, Hebdomadaire, Mensuel, Annuel
+  - Search card with amber theme to match view identity
+- Replaced Popover (doesn't exist) with DropdownMenu for PDF7 PDF report period selection
+- Lint passes cleanly
+- Server compiles and runs correctly
+
+Stage Summary:
+- Both Dépôts and Retraits views now have search forms (text + date range)
+- Both views have "Rapport PDF" button with period selection dropdown
+- PDF reports are generated client-side using jspdf + autotable (already installed)
+- Deposits PDF: green header, full table with status, totals
+- Withdrawals PDF: amber header, full table with notes, totals
+- Periods: Journalier (daily), Hebdomadaire (weekly), Mensuel (monthly), Annuel (yearly)
