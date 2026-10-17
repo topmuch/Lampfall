@@ -223,6 +223,32 @@ model Payment {
   createdAt DateTime @default(now())
 }
 
+// ─── Dépôts clients ─────────────────────────────────────────────────────────
+
+model ClientDeposit {
+  id        String   @id @default(cuid())
+  firstName String   // Prénom
+  lastName  String   // Nom
+  phone     String?  // Téléphone
+  amount    Float    // Somme déposée (FCFA)
+  method    String   @default("ESPECES") // ESPECES | WAVE | ORANGE_MONEY | FREE_MONEY | VIREMENT | CHEQUE
+  date      DateTime @default(now()) // Date du dépôt
+  notes     String?
+  createdAt DateTime @default(now())
+
+  withdrawals ClientWithdrawal[]
+}
+
+model ClientWithdrawal {
+  id        String   @id @default(cuid())
+  depositId String
+  deposit   ClientDeposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  amount    Float    // Montant retiré
+  date      DateTime @default(now()) // Date du retrait
+  note      String?  // Note / motif
+  createdAt DateTime @default(now())
+}
+
 // ─── Fournisseurs ───────────────────────────────────────────────────────────
 
 model Supplier {

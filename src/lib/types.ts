@@ -366,6 +366,30 @@ export interface SalesReportSummary {
   prevCount: number;
 }
 
+// ─── Dépôts clients ──────────────────────────────────────────────────────────
+
+export interface ClientWithdrawal {
+  id: string;
+  depositId: string;
+  amount: number;
+  date: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface ClientDeposit {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone?: string | null;
+  amount: number;
+  method: string;
+  date: string;
+  notes?: string | null;
+  createdAt: string;
+  withdrawals?: ClientWithdrawal[];
+}
+
 export interface SalesReport {
   from: string;
   to: string;
