@@ -261,11 +261,11 @@ function DepositCard({ deposit, onRefresh, onDownloadReceipt }: { deposit: Clien
                 variant="outline"
                 size="sm"
                 disabled={receiptLoading}
-                className="h-7 gap-1.5 border-green-600/40 text-green-700 hover:bg-green-600/10 hover:text-green-800 font-bold text-xs px-2.5"
-                onClick={async () => { setReceiptLoading(true); try { await onDownloadReceipt(deposit); } catch { toast({ title: "Erreur de génération", variant: "destructive" }); } finally { setReceiptLoading(false); } }}
+                className="h-8 gap-1.5 border-green-600/40 bg-green-600/5 text-green-700 hover:bg-green-600/15 hover:text-green-800 font-bold text-xs px-3"
+                onClick={async () => { setReceiptLoading(true); try { await onDownloadReceipt(deposit); } catch (err) { toast({ title: "Erreur de generation PDF", description: err instanceof Error ? err.message : "Echec de la generation du recu", variant: "destructive" }); } finally { setReceiptLoading(false); } }}
               >
-                {receiptLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                Reçu
+                {receiptLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Reçu PDF
               </Button><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={handleDelete} aria-label="Supprimer"><Trash2 className="h-3.5 w-3.5" /></Button></div>
         </div>
         <div className="flex items-center gap-2 bg-green-600/5 rounded-lg px-3 py-2">

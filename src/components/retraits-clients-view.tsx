@@ -344,11 +344,11 @@ export function RetraitsClientsView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-1.5 border-amber-500/40 text-amber-700 hover:bg-amber-600/10 hover:text-amber-800 font-bold text-xs px-3 shrink-0"
-                  onClick={() => handleDownloadReceipt(w)}
+                  className="h-8 gap-1.5 border-amber-500/40 bg-amber-500/5 text-amber-700 hover:bg-amber-600/15 hover:text-amber-800 font-bold text-xs px-3 shrink-0"
+                  onClick={async () => { try { await handleDownloadReceipt(w); } catch (err) { toast({ title: "Erreur de generation PDF", description: err instanceof Error ? err.message : "Echec de la generation du recu", variant: "destructive" }); } }}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Reçu
+                  Reçu PDF
                 </Button>
               </CardContent>
             </Card>

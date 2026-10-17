@@ -196,3 +196,27 @@ Stage Summary:
 - Each withdrawal card now has an amber download button that generates a "REÇU DE RETRAIT" PDF receipt
 - Receipts include full company branding (logo + info) and serve as proof/quittance for clients
 - Receipt format: portrait A4 with sections for company header, client info, transaction details, amount box, signature line
+
+---
+Task ID: 7
+Agent: main
+Task: Fix PDF generation error (erreur de génération) - text sanitization, better error handling, prominent receipt buttons
+
+Work Log:
+- Diagnosed issue: jsPDF default Helvetica font doesn't support French accented characters (é, è, ê, ô, à, ù, ç) causing PDF generation to fail with "Erreur de génération" toast
+- Added `t()` text sanitization function to pdf-reports.ts: strips diacritics via NFD normalization, handles ligatures (œ→oe, Œ→OE), converts curly quotes to straight quotes
+- Applied `t()` to ALL jsPDF text() calls throughout the file (4 functions: generateDepositsPdf, generateWithdrawalsPdf, generateDepositReceiptPdf, generateWithdrawalReceiptPdf)
+- Fixed image format detection in drawCompanyHeader: now detects JPEG vs PNG from data URL MIME type
+- Fixed lastAutoTable.finalY access: added Number.isFinite() check before using the value
+- Improved logo caching: now caches by URL key (not just boolean flag) so different logos work correctly
+- Updated deposits-clients-view.tsx: receipt button renamed "Reçu PDF", bigger (h-8), green background tint (bg-green-600/5), better error toast with description showing actual error message
+- Updated retraits-clients-view.tsx: receipt button renamed "Reçu PDF", amber background tint (bg-amber-500/5), added try/catch with descriptive error toast
+- Lint passes cleanly
+- Browser verified: receipt PDF generation works without errors, Rapport PDF generation works without errors
+
+Stage Summary:
+- PDF generation error fixed: French accented characters now properly sanitized for jsPDF
+- Receipt buttons more prominent: "Reçu PDF" label, colored background tint, larger size
+- Better error handling: shows actual error message instead of generic "Erreur de génération"
+- Logo image format detection improved (JPEG/PNG)
+- All PDF generation verified working in browser
