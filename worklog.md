@@ -152,3 +152,28 @@ Stage Summary:
 - Deposits PDF: green header, full table with status, totals
 - Withdrawals PDF: amber header, full table with notes, totals
 - Periods: Journalier (daily), Hebdomadaire (weekly), Mensuel (monthly), Annuel (yearly)
+
+---
+Task ID: 1
+Agent: main
+Task: Update PDF reports to include company logo and site information
+
+Work Log:
+- Read existing pdf-reports.ts, deposits-clients-view.tsx, retraits-clients-view.tsx
+- Read constants.ts COMPANY info and Settings type
+- Updated pdf-reports.ts with new CompanyInfo interface, drawCompanyHeader() function, logo loading utility
+- Updated generateDepositsPdf() to accept logoDataUrl and companyInfo params, render logo + company info in header
+- Updated generateWithdrawalsPdf() similarly
+- Added loadLogoAsDataUrl() utility with caching for fetching logo as base64
+- Updated deposits-clients-view.tsx: import COMPANY, useSettingsStore, pdfLoading state, async handlePdfReport
+- Updated retraits-clients-view.tsx: same pattern with amber theme
+- Both PDF buttons now show loading spinner while generating
+- Lint passes cleanly, no TS errors in modified files
+
+Stage Summary:
+- PDF reports now include company logo (from settings or /logo-green.png) in top-left
+- Company info (name, tagline, address, phone, email, RC, NINEA) rendered next to logo
+- Green separator line below header
+- Footer includes company name
+- Logo is cached after first load for performance
+- Settings from database take priority over constant defaults

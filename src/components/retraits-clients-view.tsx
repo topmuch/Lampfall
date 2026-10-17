@@ -31,12 +31,16 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useFetch } from "@/hooks/use-fetch";
 import { authFetch } from "@/lib/auth-client";
-import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants";
+import { formatDate, formatMoney, PAYMENT_METHOD_LABELS, COMPANY } from "@/lib/constants";
 import {
   generateWithdrawalsPdf,
+  loadLogoAsDataUrl,
+  getDefaultCompanyInfo,
   PERIOD_LABELS,
   type Period,
+  type CompanyInfo,
 } from "@/lib/pdf-reports";
+import { useSettingsStore } from "@/lib/settings-store";
 import type { ClientDeposit, ClientWithdrawal } from "@/lib/types";
 
 function todayISO(): string {
@@ -117,7 +121,9 @@ export function RetraitsClientsView() {
   const [search, setSearch] = useState("");
   const [searchDateFrom, setSearchDateFrom] = useState("");
   const [searchDateTo, setSearchDateTo] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
+  const { settings } = useSettingsStore();
   const { data: deposits, loading, error, refetch } = useFetch<ClientDeposit[]>(
     `/api/client-deposits?year=${year}`
   );
@@ -183,9 +189,26 @@ export function RetraitsClientsView() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => String(currentYear - i));
 
-  const handlePdfReport = (period: Period) => {
+  const handlePdfReport = async (period: Period) => {
     if (allWithdrawals.length === 0) return;
-    generateWithdrawalsPdf(allWithdrawals, period);
+    setPdfLoading(true);
+    try {
+      const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
+      const companyInfo: CompanyInfo = settings
+        ? {
+            name: settings.nomSociete || COMPANY.name,
+            tagline: settings.tagline || COMPANY.tagline,
+            address: settings.adresse || COMPANY.address,
+            phone: settings.telephone || COMPANY.phone,
+            email: settings.email || COMPANY.email,
+            rc: settings.rc || undefined,
+            ninea: settings.ninea || undefined,
+          }
+        : getDefaultCompanyInfo();
+      generateWithdrawalsPdf(allWithdrawals, period, undefined, logoDataUrl, companyInfo);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const clearSearch = () => { setSearch(""); setSearchDateFrom(""); setSearchDateTo(""); };
@@ -262,8 +285,8 @@ export function RetraitsClientsView() {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" disabled={!allWithdrawals.length} className="border-amber-500/30 text-amber-700 hover:bg-amber-500/5 font-bold">
-                <FileText className="h-4 w-4 mr-1.5" />Rapport PDF
+              <Button variant="outline" size="sm" disabled={!allWithdrawals.length || pdfLoading} className="border-amber-500/30 text-amber-700 hover:bg-amber-500/5 font-bold">
+                {pdfLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileText className="h-4 w-4 mr-1.5" />}Rapport PDF
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

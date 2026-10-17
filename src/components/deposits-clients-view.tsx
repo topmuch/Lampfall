@@ -36,12 +36,16 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useFetch } from "@/hooks/use-fetch";
 import { authFetch } from "@/lib/auth-client";
-import { formatDate, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/constants";
+import { formatDate, formatMoney, PAYMENT_METHOD_LABELS, COMPANY } from "@/lib/constants";
 import {
   generateDepositsPdf,
+  loadLogoAsDataUrl,
+  getDefaultCompanyInfo,
   PERIOD_LABELS,
   type Period,
+  type CompanyInfo,
 } from "@/lib/pdf-reports";
+import { useSettingsStore } from "@/lib/settings-store";
 import type { ClientDeposit } from "@/lib/types";
 
 const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS);
@@ -296,7 +300,9 @@ export function DepositsClientsView() {
   const [search, setSearch] = useState("");
   const [searchDateFrom, setSearchDateFrom] = useState("");
   const [searchDateTo, setSearchDateTo] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
+  const { settings } = useSettingsStore();
   const { data: deposits, loading, error, refetch } = useFetch<ClientDeposit[]>(
     `/api/client-deposits?year=${year}`
   );
@@ -369,9 +375,26 @@ export function DepositsClientsView() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => String(currentYear - i));
 
-  const handlePdfReport = (period: Period) => {
+  const handlePdfReport = async (period: Period) => {
     if (!deposits || deposits.length === 0) return;
-    generateDepositsPdf(deposits, period);
+    setPdfLoading(true);
+    try {
+      const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
+      const companyInfo: CompanyInfo = settings
+        ? {
+            name: settings.nomSociete || COMPANY.name,
+            tagline: settings.tagline || COMPANY.tagline,
+            address: settings.adresse || COMPANY.address,
+            phone: settings.telephone || COMPANY.phone,
+            email: settings.email || COMPANY.email,
+            rc: settings.rc || undefined,
+            ninea: settings.ninea || undefined,
+          }
+        : getDefaultCompanyInfo();
+      generateDepositsPdf(deposits, period, undefined, logoDataUrl, companyInfo);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const clearSearch = () => { setSearch(""); setSearchDateFrom(""); setSearchDateTo(""); };
@@ -443,8 +466,8 @@ export function DepositsClientsView() {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" disabled={!deposits?.length} className="border-green-600/30 text-green-700 hover:bg-green-600/5 font-bold">
-                <FileText className="h-4 w-4 mr-1.5" />Rapport PDF
+              <Button variant="outline" size="sm" disabled={!deposits?.length || pdfLoading} className="border-green-600/30 text-green-700 hover:bg-green-600/5 font-bold">
+                {pdfLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileText className="h-4 w-4 mr-1.5" />}Rapport PDF
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
