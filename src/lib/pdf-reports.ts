@@ -9,6 +9,25 @@ import autoTable from "jspdf-autotable";
 import { formatDate, formatMoney, PAYMENT_METHOD_LABELS, COMPANY } from "@/lib/constants";
 import type { ClientDeposit, ClientWithdrawal } from "@/lib/types";
 
+/* ─── Sanitisation du texte pour jsPDF ────────────────────────────────────── */
+
+/**
+ * Remplace les caractères accentués français par leurs équivalents ASCII.
+ * jsPDF avec la police Helvetica par défaut ne supporte pas tous les
+ * caractères Unicode — cette fonction assure un rendu correct.
+ */
+function t(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Supprime les diacritiques combinés
+    .replace(/\u0152/g, "OE")         // Œ → OE
+    .replace(/\u0153/g, "oe")         // œ → oe
+    .replace(/\u00C6/g, "AE")         // Æ → AE
+    .replace(/\u00E6/g, "ae")         // æ → ae
+    .replace(/\u00DF/g, "ss")         // ß → ss
+    .replace(/'/g, "'");              // Apostrophe courbe → droite
+}
+
 /* ─── Infos société pour le PDF ──────────────────────────────────────────── */
 
 export interface CompanyInfo {
@@ -108,10 +127,11 @@ function drawCompanyHeader(
   let logoWidth = 0;
   if (logoDataUrl) {
     try {
-      // Dimensions du logo dans le PDF
       const logoW = 28;
       const logoH = 28;
-      doc.addImage(logoDataUrl, "PNG", 14, currentY, logoW, logoH);
+      // Détecter le format d'image depuis le data URL
+      const format = logoDataUrl.includes("image/jpeg") || logoDataUrl.includes("image/jpg") ? "JPEG" : "PNG";
+      doc.addImage(logoDataUrl, format, 14, currentY, logoW, logoH);
       logoWidth = logoW;
     } catch {
       // Si l'image ne peut pas être ajoutée, on continue sans logo
@@ -124,22 +144,22 @@ function drawCompanyHeader(
 
   doc.setFontSize(14);
   doc.setTextColor(22, 101, 52); // green-700
-  doc.text(info.name, textX, currentY + 5, { maxWidth: maxTextWidth });
+  doc.text(t(info.name), textX, currentY + 5, { maxWidth: maxTextWidth });
 
   doc.setFontSize(9);
   doc.setTextColor(80);
-  doc.text(info.tagline, textX, currentY + 11, { maxWidth: maxTextWidth });
+  doc.text(t(info.tagline), textX, currentY + 11, { maxWidth: maxTextWidth });
 
   doc.setFontSize(8);
   doc.setTextColor(100);
-  doc.text(info.address, textX, currentY + 16, { maxWidth: maxTextWidth });
-  doc.text(`Tél : ${info.phone}  |  Email : ${info.email}`, textX, currentY + 21, { maxWidth: maxTextWidth });
+  doc.text(t(info.address), textX, currentY + 16, { maxWidth: maxTextWidth });
+  doc.text(t(`Tel : ${info.phone}  |  Email : ${info.email}`), textX, currentY + 21, { maxWidth: maxTextWidth });
 
   const idLines: string[] = [];
   if (info.rc) idLines.push(`RC : ${info.rc}`);
   if (info.ninea) idLines.push(info.ninea);
   if (idLines.length > 0) {
-    doc.text(idLines.join("  |  "), textX, currentY + 26, { maxWidth: maxTextWidth });
+    doc.text(t(idLines.join("  |  ")), textX, currentY + 26, { maxWidth: maxTextWidth });
   }
 
   // Ligne de séparation
@@ -173,18 +193,18 @@ export function generateDepositsPdf(
   // Titre du rapport
   doc.setFontSize(14);
   doc.setTextColor(22, 101, 52); // green-700
-  doc.text("RAPPORT DÉPÔTS CLIENTS", 14, y);
+  doc.text(t("RAPPORT DEPOTS CLIENTS"), 14, y);
   y += 6;
 
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(
-    `Période : ${PERIOD_LABELS[period]} — du ${formatDate(start.toISOString())} au ${formatDate(new Date(end.getTime() - 1).toISOString())}`,
+    t(`Periode : ${PERIOD_LABELS[period]} - du ${formatDate(start.toISOString())} au ${formatDate(new Date(end.getTime() - 1).toISOString())}`),
     14,
     y
   );
   y += 5;
-  doc.text(`Généré le ${formatDate(new Date().toISOString())}`, 14, y);
+  doc.text(t(`Genere le ${formatDate(new Date().toISOString())}`), 14, y);
   y += 8;
 
   // Stats
@@ -197,11 +217,11 @@ export function generateDepositsPdf(
 
   doc.setFontSize(10);
   doc.setTextColor(22, 101, 52);
-  doc.text(`Total déposé : ${formatMoney(totalDeposed)}`, 14, y);
+  doc.text(t(`Total depose : ${formatMoney(totalDeposed)}`), 14, y);
   doc.setTextColor(180, 83, 9); // amber-600
-  doc.text(`Total retiré : ${formatMoney(totalWithdrawn)}`, 100, y);
+  doc.text(t(`Total retire : ${formatMoney(totalWithdrawn)}`), 100, y);
   doc.setTextColor(5, 150, 105); // emerald
-  doc.text(`Solde à rendre : ${formatMoney(balance)}`, 200, y);
+  doc.text(t(`Solde a rendre : ${formatMoney(balance)}`), 200, y);
   y += 6;
 
   // Tableau
@@ -209,22 +229,22 @@ export function generateDepositsPdf(
     const tw = d.withdrawals?.reduce((s, w) => s + w.amount, 0) ?? 0;
     const rem = d.amount - tw;
     const status =
-      rem <= 0.009 ? "Soldé" : tw > 0 ? "Retrait partiel" : "Non retiré";
+      rem <= 0.009 ? "Solde" : tw > 0 ? "Retrait partiel" : "Non retire";
     return [
-      `${d.firstName} ${d.lastName}`,
-      d.phone || "—",
+      t(`${d.firstName} ${d.lastName}`),
+      d.phone || "-",
       formatDate(d.date),
       formatMoney(d.amount),
-      PAYMENT_METHOD_LABELS[d.method] ?? d.method,
+      t(PAYMENT_METHOD_LABELS[d.method] ?? d.method),
       formatMoney(tw),
       formatMoney(rem),
-      status,
+      t(status),
     ];
   });
 
   autoTable(doc, {
     startY: y,
-    head: [["Client", "Tél.", "Date dépôt", "Montant", "Mode", "Retiré", "Restant", "Statut"]],
+    head: [[t("Client"), t("Tel."), t("Date depot"), t("Montant"), t("Mode"), t("Retire"), t("Restant"), t("Statut")]],
     body: rows,
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
@@ -241,9 +261,9 @@ export function generateDepositsPdf(
   const info = companyInfo ?? getDefaultCompanyInfo();
   doc.setFontSize(8);
   doc.setTextColor(150);
-  doc.text(`${info.name} — Rapport dépôts clients`, 14, pageHeight - 8);
+  doc.text(t(`${info.name} - Rapport depots clients`), 14, pageHeight - 8);
   doc.text(
-    `${filtered.length} dépôt(s) — ${formatMoney(totalDeposed)}`,
+    t(`${filtered.length} depot(s) - ${formatMoney(totalDeposed)}`),
     14,
     pageHeight - 4
   );
@@ -282,18 +302,18 @@ export function generateWithdrawalsPdf(
   // Titre du rapport
   doc.setFontSize(14);
   doc.setTextColor(180, 83, 9); // amber-700
-  doc.text("RAPPORT RETRAITS CLIENTS", 14, y);
+  doc.text(t("RAPPORT RETRAITS CLIENTS"), 14, y);
   y += 6;
 
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(
-    `Période : ${PERIOD_LABELS[period]} — du ${formatDate(start.toISOString())} au ${formatDate(new Date(end.getTime() - 1).toISOString())}`,
+    t(`Periode : ${PERIOD_LABELS[period]} - du ${formatDate(start.toISOString())} au ${formatDate(new Date(end.getTime() - 1).toISOString())}`),
     14,
     y
   );
   y += 5;
-  doc.text(`Généré le ${formatDate(new Date().toISOString())}`, 14, y);
+  doc.text(t(`Genere le ${formatDate(new Date().toISOString())}`), 14, y);
   y += 8;
 
   // Stats
@@ -301,25 +321,25 @@ export function generateWithdrawalsPdf(
 
   doc.setFontSize(10);
   doc.setTextColor(180, 83, 9);
-  doc.text(`Total retiré : ${formatMoney(totalWithdrawn)}`, 14, y);
-  doc.text(`${filtered.length} retrait(s)`, 100, y);
+  doc.text(t(`Total retire : ${formatMoney(totalWithdrawn)}`), 14, y);
+  doc.text(t(`${filtered.length} retrait(s)`), 100, y);
   y += 6;
 
   // Tableau
   const rows = filtered.map((w) => [
-    `${w.depositFirstName} ${w.depositLastName}`,
-    w.depositPhone || "—",
+    t(`${w.depositFirstName} ${w.depositLastName}`),
+    w.depositPhone || "-",
     formatDate(w.date),
     formatMoney(w.amount),
-    w.note || "—",
+    t(w.note || "-"),
     formatMoney(w.depositAmount),
-    PAYMENT_METHOD_LABELS[w.depositMethod] ?? w.depositMethod,
+    t(PAYMENT_METHOD_LABELS[w.depositMethod] ?? w.depositMethod),
     formatDate(w.depositDate),
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [["Client", "Tél.", "Date retrait", "Montant retiré", "Note", "Dépôt origine", "Mode dépôt", "Date dépôt"]],
+    head: [[t("Client"), t("Tel."), t("Date retrait"), t("Montant retire"), t("Note"), t("Depot origine"), t("Mode depot"), t("Date depot")]],
     body: rows,
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [180, 83, 9], textColor: 255, fontStyle: "bold" },
@@ -335,9 +355,9 @@ export function generateWithdrawalsPdf(
   const info = companyInfo ?? getDefaultCompanyInfo();
   doc.setFontSize(8);
   doc.setTextColor(150);
-  doc.text(`${info.name} — Rapport retraits clients`, 14, pageHeight - 8);
+  doc.text(t(`${info.name} - Rapport retraits clients`), 14, pageHeight - 8);
   doc.text(
-    `${filtered.length} retrait(s) — ${formatMoney(totalWithdrawn)}`,
+    t(`${filtered.length} retrait(s) - ${formatMoney(totalWithdrawn)}`),
     14,
     pageHeight - 4
   );
@@ -366,7 +386,7 @@ export function generateDepositReceiptPdf(
   y += 4;
   doc.setFontSize(18);
   doc.setTextColor(22, 101, 52);
-  doc.text("REÇU DE DÉPÔT", pageWidth / 2, y, { align: "center" });
+  doc.text(t("RECU DE DEPOT"), pageWidth / 2, y, { align: "center" });
   y += 3;
 
   // Ligne sous le titre
@@ -379,15 +399,15 @@ export function generateDepositReceiptPdf(
   const receiptNum = `DPT-${deposit.id.slice(-6).toUpperCase()}`;
   doc.setFontSize(9);
   doc.setTextColor(100);
-  doc.text(`N° Reçu : ${receiptNum}`, margin, y);
-  doc.text(`Date : ${formatDate(new Date().toISOString())}`, pageWidth - margin, y, { align: "right" });
+  doc.text(t(`N. Recu : ${receiptNum}`), margin, y);
+  doc.text(t(`Date : ${formatDate(new Date().toISOString())}`), pageWidth - margin, y, { align: "right" });
   y += 10;
 
   // ── Infos client
   doc.setFontSize(11);
   doc.setTextColor(30);
   doc.setFont("helvetica", "bold");
-  doc.text("Informations client", margin, y);
+  doc.text(t("Informations client"), margin, y);
   y += 2;
   doc.setDrawColor(200);
   doc.setLineWidth(0.3);
@@ -398,16 +418,16 @@ export function generateDepositReceiptPdf(
   doc.setFontSize(10);
   doc.setTextColor(50);
 
-  // Client name + phone in a two-column layout
+  // Client name + phone
   doc.setFont("helvetica", "bold");
-  doc.text("Nom complet :", margin, y);
+  doc.text(t("Nom complet :"), margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(`${deposit.firstName} ${deposit.lastName}`, margin + 40, y);
+  doc.text(t(`${deposit.firstName} ${deposit.lastName}`), margin + 40, y);
   y += 6;
 
   if (deposit.phone) {
     doc.setFont("helvetica", "bold");
-    doc.text("Téléphone :", margin, y);
+    doc.text(t("Telephone :"), margin, y);
     doc.setFont("helvetica", "normal");
     doc.text(deposit.phone, margin + 40, y);
     y += 6;
@@ -419,7 +439,7 @@ export function generateDepositReceiptPdf(
   doc.setFontSize(11);
   doc.setTextColor(30);
   doc.setFont("helvetica", "bold");
-  doc.text("Détails du dépôt", margin, y);
+  doc.text(t("Details du depot"), margin, y);
   y += 2;
   doc.setDrawColor(200);
   doc.line(margin, y, margin + contentWidth, y);
@@ -430,23 +450,23 @@ export function generateDepositReceiptPdf(
 
   // Date du dépôt
   doc.setFont("helvetica", "bold");
-  doc.text("Date du dépôt :", margin, y);
+  doc.text(t("Date du depot :"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.text(formatDate(deposit.date), margin + 45, y);
   y += 7;
 
   // Mode de paiement
   doc.setFont("helvetica", "bold");
-  doc.text("Mode de paiement :", margin, y);
+  doc.text(t("Mode de paiement :"), margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(PAYMENT_METHOD_LABELS[deposit.method] ?? deposit.method, margin + 45, y);
+  doc.text(t(PAYMENT_METHOD_LABELS[deposit.method] ?? deposit.method), margin + 45, y);
   y += 7;
 
   if (deposit.notes) {
     doc.setFont("helvetica", "bold");
-    doc.text("Notes :", margin, y);
+    doc.text(t("Notes :"), margin, y);
     doc.setFont("helvetica", "normal");
-    doc.text(deposit.notes, margin + 45, y, { maxWidth: contentWidth - 45 });
+    doc.text(t(deposit.notes), margin + 45, y, { maxWidth: contentWidth - 45 });
     y += 7;
   }
 
@@ -465,7 +485,7 @@ export function generateDepositReceiptPdf(
   doc.setFontSize(10);
   doc.setTextColor(22, 101, 52);
   doc.setFont("helvetica", "bold");
-  doc.text("MONTANT DÉPOSÉ", boxX + boxW / 2, boxY + 8, { align: "center" });
+  doc.text(t("MONTANT DEPOSE"), boxX + boxW / 2, boxY + 8, { align: "center" });
 
   doc.setFontSize(16);
   doc.text(formatMoney(deposit.amount), boxX + boxW / 2, boxY + 17, { align: "center" });
@@ -479,7 +499,7 @@ export function generateDepositReceiptPdf(
     doc.setFontSize(11);
     doc.setTextColor(30);
     doc.setFont("helvetica", "bold");
-    doc.text("Retraits effectués", margin, y);
+    doc.text(t("Retraits effectues"), margin, y);
     y += 2;
     doc.setDrawColor(200);
     doc.setLineWidth(0.3);
@@ -490,19 +510,23 @@ export function generateDepositReceiptPdf(
       autoTable(doc, {
         startY: y,
         margin: { left: margin, right: margin },
-        head: [["Date", "Montant retiré", "Note"]],
+        head: [[t("Date"), t("Montant retire"), t("Note")]],
         body: deposit.withdrawals.map((w) => [
           formatDate(w.date),
           formatMoney(w.amount),
-          w.note || "—",
+          t(w.note || "-"),
         ]),
         styles: { fontSize: 9, cellPadding: 3 },
         headStyles: { fillColor: [180, 83, 9], textColor: 255, fontStyle: "bold" },
         columnStyles: { 1: { halign: "right" } },
       });
       // Get the final Y from autoTable
-      const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY;
-      y = finalY ?? y + 30;
+      const finalY = (doc as unknown as Record<string, { finalY: number }>).lastAutoTable?.finalY;
+      if (finalY && Number.isFinite(finalY)) {
+        y = finalY;
+      } else {
+        y += 30;
+      }
       y += 4;
     }
 
@@ -510,10 +534,10 @@ export function generateDepositReceiptPdf(
     doc.setFontSize(11);
     doc.setTextColor(180, 83, 9);
     doc.setFont("helvetica", "bold");
-    doc.text(`Total retiré : ${formatMoney(totalWithdrawn)}`, margin, y);
+    doc.text(t(`Total retire : ${formatMoney(totalWithdrawn)}`), margin, y);
     y += 6;
     doc.setTextColor(22, 101, 52);
-    doc.text(`Solde restant : ${formatMoney(remaining)}`, margin, y);
+    doc.text(t(`Solde restant : ${formatMoney(remaining)}`), margin, y);
     y += 10;
   }
 
@@ -525,13 +549,13 @@ export function generateDepositReceiptPdf(
   doc.setFontSize(9);
   doc.setTextColor(100);
   doc.setFont("helvetica", "normal");
-  doc.text("Signature & Cachet", margin, y + 5);
+  doc.text(t("Signature & Cachet"), margin, y + 5);
 
   // ── Pied de page
   doc.setFontSize(7);
   doc.setTextColor(150);
-  doc.text(`${info.name} — ${info.address} — Tél : ${info.phone}`, pageWidth / 2, pageHeight - 8, { align: "center" });
-  doc.text(`Reçu généré le ${formatDate(new Date().toISOString())}`, pageWidth / 2, pageHeight - 4, { align: "center" });
+  doc.text(t(`${info.name} - ${info.address} - Tel : ${info.phone}`), pageWidth / 2, pageHeight - 8, { align: "center" });
+  doc.text(t(`Recu genere le ${formatDate(new Date().toISOString())}`), pageWidth / 2, pageHeight - 4, { align: "center" });
 
   doc.save(`recu-depot-${deposit.firstName}-${deposit.lastName}-${deposit.id.slice(-6)}.pdf`);
 }
@@ -566,7 +590,7 @@ export function generateWithdrawalReceiptPdf(
   y += 4;
   doc.setFontSize(18);
   doc.setTextColor(180, 83, 9); // amber-700
-  doc.text("REÇU DE RETRAIT", pageWidth / 2, y, { align: "center" });
+  doc.text(t("RECU DE RETRAIT"), pageWidth / 2, y, { align: "center" });
   y += 3;
 
   // Ligne sous le titre
@@ -579,15 +603,15 @@ export function generateWithdrawalReceiptPdf(
   const receiptNum = `RET-${withdrawal.id.slice(-6).toUpperCase()}`;
   doc.setFontSize(9);
   doc.setTextColor(100);
-  doc.text(`N° Reçu : ${receiptNum}`, margin, y);
-  doc.text(`Date : ${formatDate(new Date().toISOString())}`, pageWidth - margin, y, { align: "right" });
+  doc.text(t(`N. Recu : ${receiptNum}`), margin, y);
+  doc.text(t(`Date : ${formatDate(new Date().toISOString())}`), pageWidth - margin, y, { align: "right" });
   y += 10;
 
   // ── Infos client
   doc.setFontSize(11);
   doc.setTextColor(30);
   doc.setFont("helvetica", "bold");
-  doc.text("Informations client", margin, y);
+  doc.text(t("Informations client"), margin, y);
   y += 2;
   doc.setDrawColor(200);
   doc.setLineWidth(0.3);
@@ -599,14 +623,14 @@ export function generateWithdrawalReceiptPdf(
   doc.setTextColor(50);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Nom complet :", margin, y);
+  doc.text(t("Nom complet :"), margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(`${withdrawal.depositFirstName} ${withdrawal.depositLastName}`, margin + 40, y);
+  doc.text(t(`${withdrawal.depositFirstName} ${withdrawal.depositLastName}`), margin + 40, y);
   y += 6;
 
   if (withdrawal.depositPhone) {
     doc.setFont("helvetica", "bold");
-    doc.text("Téléphone :", margin, y);
+    doc.text(t("Telephone :"), margin, y);
     doc.setFont("helvetica", "normal");
     doc.text(withdrawal.depositPhone, margin + 40, y);
     y += 6;
@@ -618,7 +642,7 @@ export function generateWithdrawalReceiptPdf(
   doc.setFontSize(11);
   doc.setTextColor(30);
   doc.setFont("helvetica", "bold");
-  doc.text("Dépôt d'origine", margin, y);
+  doc.text(t("Depot d'origine"), margin, y);
   y += 2;
   doc.setDrawColor(200);
   doc.line(margin, y, margin + contentWidth, y);
@@ -628,28 +652,28 @@ export function generateWithdrawalReceiptPdf(
   doc.setTextColor(50);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Date du dépôt :", margin, y);
+  doc.text(t("Date du depot :"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.text(formatDate(withdrawal.depositDate), margin + 45, y);
   y += 7;
 
   doc.setFont("helvetica", "bold");
-  doc.text("Montant déposé :", margin, y);
+  doc.text(t("Montant depose :"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.text(formatMoney(withdrawal.depositAmount), margin + 45, y);
   y += 7;
 
   doc.setFont("helvetica", "bold");
-  doc.text("Mode de paiement :", margin, y);
+  doc.text(t("Mode de paiement :"), margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(PAYMENT_METHOD_LABELS[withdrawal.depositMethod] ?? withdrawal.depositMethod, margin + 45, y);
+  doc.text(t(PAYMENT_METHOD_LABELS[withdrawal.depositMethod] ?? withdrawal.depositMethod), margin + 45, y);
   y += 10;
 
   // ── Détails du retrait
   doc.setFontSize(11);
   doc.setTextColor(30);
   doc.setFont("helvetica", "bold");
-  doc.text("Détails du retrait", margin, y);
+  doc.text(t("Details du retrait"), margin, y);
   y += 2;
   doc.setDrawColor(200);
   doc.line(margin, y, margin + contentWidth, y);
@@ -659,16 +683,16 @@ export function generateWithdrawalReceiptPdf(
   doc.setTextColor(50);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Date du retrait :", margin, y);
+  doc.text(t("Date du retrait :"), margin, y);
   doc.setFont("helvetica", "normal");
   doc.text(formatDate(withdrawal.date), margin + 45, y);
   y += 7;
 
   if (withdrawal.note) {
     doc.setFont("helvetica", "bold");
-    doc.text("Motif :", margin, y);
+    doc.text(t("Motif :"), margin, y);
     doc.setFont("helvetica", "normal");
-    doc.text(withdrawal.note, margin + 45, y, { maxWidth: contentWidth - 45 });
+    doc.text(t(withdrawal.note), margin + 45, y, { maxWidth: contentWidth - 45 });
     y += 7;
   }
 
@@ -687,7 +711,7 @@ export function generateWithdrawalReceiptPdf(
   doc.setFontSize(10);
   doc.setTextColor(180, 83, 9);
   doc.setFont("helvetica", "bold");
-  doc.text("MONTANT RETIRÉ", boxX + boxW / 2, boxY + 8, { align: "center" });
+  doc.text(t("MONTANT RETIRE"), boxX + boxW / 2, boxY + 8, { align: "center" });
 
   doc.setFontSize(16);
   doc.text(formatMoney(withdrawal.amount), boxX + boxW / 2, boxY + 17, { align: "center" });
@@ -698,7 +722,7 @@ export function generateWithdrawalReceiptPdf(
   doc.setFontSize(10);
   doc.setTextColor(22, 101, 52);
   doc.setFont("helvetica", "bold");
-  doc.text(`Solde restant après retrait : ${formatMoney(remainingAfter)}`, margin, y);
+  doc.text(t(`Solde restant apres retrait : ${formatMoney(remainingAfter)}`), margin, y);
   y += 10;
 
   // ── Ligne de signature
@@ -709,13 +733,13 @@ export function generateWithdrawalReceiptPdf(
   doc.setFontSize(9);
   doc.setTextColor(100);
   doc.setFont("helvetica", "normal");
-  doc.text("Signature & Cachet", margin, y + 5);
+  doc.text(t("Signature & Cachet"), margin, y + 5);
 
   // ── Pied de page
   doc.setFontSize(7);
   doc.setTextColor(150);
-  doc.text(`${info.name} — ${info.address} — Tél : ${info.phone}`, pageWidth / 2, pageHeight - 8, { align: "center" });
-  doc.text(`Reçu généré le ${formatDate(new Date().toISOString())}`, pageWidth / 2, pageHeight - 4, { align: "center" });
+  doc.text(t(`${info.name} - ${info.address} - Tel : ${info.phone}`), pageWidth / 2, pageHeight - 8, { align: "center" });
+  doc.text(t(`Recu genere le ${formatDate(new Date().toISOString())}`), pageWidth / 2, pageHeight - 4, { align: "center" });
 
   doc.save(`recu-retrait-${withdrawal.depositFirstName}-${withdrawal.depositLastName}-${withdrawal.id.slice(-6)}.pdf`);
 }
@@ -723,7 +747,7 @@ export function generateWithdrawalReceiptPdf(
 /* ─── Utilitaire : charger le logo en base64 ─────────────────────────────── */
 
 let cachedLogoDataUrl: string | null = null;
-let logoLoadAttempted = false;
+let cachedLogoKey: string | null = null;
 
 /**
  * Charge le logo de l'entreprise en base64 data URL.
@@ -731,15 +755,14 @@ let logoLoadAttempted = false;
  * Le résultat est mis en cache pour éviter les rechargements.
  */
 export async function loadLogoAsDataUrl(logoUrl?: string | null): Promise<string | undefined> {
-  // Retourne le cache si déjà chargé
-  if (cachedLogoDataUrl) return cachedLogoDataUrl;
-  if (logoLoadAttempted && !cachedLogoDataUrl) return undefined;
+  const key = logoUrl || "/logo-green.png";
+
+  // Retourne le cache si même URL déjà chargée
+  if (cachedLogoDataUrl && cachedLogoKey === key) return cachedLogoDataUrl;
 
   try {
-    const url = logoUrl || "/logo-green.png";
-    const response = await fetch(url);
+    const response = await fetch(key);
     if (!response.ok) {
-      logoLoadAttempted = true;
       return undefined;
     }
     const blob = await response.blob();
@@ -750,10 +773,9 @@ export async function loadLogoAsDataUrl(logoUrl?: string | null): Promise<string
       reader.readAsDataURL(blob);
     });
     cachedLogoDataUrl = dataUrl;
-    logoLoadAttempted = true;
+    cachedLogoKey = key;
     return dataUrl;
   } catch {
-    logoLoadAttempted = true;
     return undefined;
   }
 }
