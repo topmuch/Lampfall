@@ -345,6 +345,381 @@ export function generateWithdrawalsPdf(
   doc.save(`rapport-retraits-${period}-${start.toISOString().slice(0, 10)}.pdf`);
 }
 
+/* ─── Reçu PDF — Dépôt unique ───────────────────────────────────────────── */
+
+export function generateDepositReceiptPdf(
+  deposit: ClientDeposit,
+  logoDataUrl?: string,
+  companyInfo?: CompanyInfo
+) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const info = companyInfo ?? getDefaultCompanyInfo();
+  const pageWidth = doc.internalPageSize.getWidth();
+  const pageHeight = doc.internalPageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+
+  // ── En-tête société (logo + infos)
+  let y = drawCompanyHeader(doc, logoDataUrl, companyInfo);
+
+  // ── Titre du reçu
+  y += 4;
+  doc.setFontSize(18);
+  doc.setTextColor(22, 101, 52);
+  doc.text("REÇU DE DÉPÔT", pageWidth / 2, y, { align: "center" });
+  y += 3;
+
+  // Ligne sous le titre
+  doc.setDrawColor(22, 101, 52);
+  doc.setLineWidth(1);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  // ── N° reçu + date
+  const receiptNum = `DPT-${deposit.id.slice(-6).toUpperCase()}`;
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`N° Reçu : ${receiptNum}`, margin, y);
+  doc.text(`Date : ${formatDate(new Date().toISOString())}`, pageWidth - margin, y, { align: "right" });
+  y += 10;
+
+  // ── Infos client
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  doc.setFont("helvetica", "bold");
+  doc.text("Informations client", margin, y);
+  y += 2;
+  doc.setDrawColor(200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+
+  // Client name + phone in a two-column layout
+  doc.setFont("helvetica", "bold");
+  doc.text("Nom complet :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(`${deposit.firstName} ${deposit.lastName}`, margin + 40, y);
+  y += 6;
+
+  if (deposit.phone) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Téléphone :", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(deposit.phone, margin + 40, y);
+    y += 6;
+  }
+
+  y += 4;
+
+  // ── Détails de la transaction
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  doc.setFont("helvetica", "bold");
+  doc.text("Détails du dépôt", margin, y);
+  y += 2;
+  doc.setDrawColor(200);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+
+  // Date du dépôt
+  doc.setFont("helvetica", "bold");
+  doc.text("Date du dépôt :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(formatDate(deposit.date), margin + 45, y);
+  y += 7;
+
+  // Mode de paiement
+  doc.setFont("helvetica", "bold");
+  doc.text("Mode de paiement :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(PAYMENT_METHOD_LABELS[deposit.method] ?? deposit.method, margin + 45, y);
+  y += 7;
+
+  if (deposit.notes) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Notes :", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(deposit.notes, margin + 45, y, { maxWidth: contentWidth - 45 });
+    y += 7;
+  }
+
+  // ── Montant encadré
+  y += 6;
+  const boxX = margin;
+  const boxY = y;
+  const boxW = contentWidth;
+  const boxH = 22;
+
+  doc.setFillColor(240, 253, 244); // green-50
+  doc.setDrawColor(22, 101, 52);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(boxX, boxY, boxW, boxH, 3, 3, "FD");
+
+  doc.setFontSize(10);
+  doc.setTextColor(22, 101, 52);
+  doc.setFont("helvetica", "bold");
+  doc.text("MONTANT DÉPOSÉ", boxX + boxW / 2, boxY + 8, { align: "center" });
+
+  doc.setFontSize(16);
+  doc.text(formatMoney(deposit.amount), boxX + boxW / 2, boxY + 17, { align: "center" });
+  y = boxY + boxH + 10;
+
+  // ── Historique retraits (si applicable)
+  const totalWithdrawn = deposit.withdrawals?.reduce((s, w) => s + w.amount, 0) ?? 0;
+  const remaining = Math.max(0, deposit.amount - totalWithdrawn);
+
+  if (totalWithdrawn > 0) {
+    doc.setFontSize(11);
+    doc.setTextColor(30);
+    doc.setFont("helvetica", "bold");
+    doc.text("Retraits effectués", margin, y);
+    y += 2;
+    doc.setDrawColor(200);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 6;
+
+    if (deposit.withdrawals && deposit.withdrawals.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["Date", "Montant retiré", "Note"]],
+        body: deposit.withdrawals.map((w) => [
+          formatDate(w.date),
+          formatMoney(w.amount),
+          w.note || "—",
+        ]),
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [180, 83, 9], textColor: 255, fontStyle: "bold" },
+        columnStyles: { 1: { halign: "right" } },
+      });
+      // Get the final Y from autoTable
+      const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY;
+      y = finalY ?? y + 30;
+      y += 4;
+    }
+
+    // Solde restant
+    doc.setFontSize(11);
+    doc.setTextColor(180, 83, 9);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total retiré : ${formatMoney(totalWithdrawn)}`, margin, y);
+    y += 6;
+    doc.setTextColor(22, 101, 52);
+    doc.text(`Solde restant : ${formatMoney(remaining)}`, margin, y);
+    y += 10;
+  }
+
+  // ── Ligne de signature
+  y = Math.max(y, pageHeight - 50);
+  doc.setDrawColor(180);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, margin + 50, y);
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature & Cachet", margin, y + 5);
+
+  // ── Pied de page
+  doc.setFontSize(7);
+  doc.setTextColor(150);
+  doc.text(`${info.name} — ${info.address} — Tél : ${info.phone}`, pageWidth / 2, pageHeight - 8, { align: "center" });
+  doc.text(`Reçu généré le ${formatDate(new Date().toISOString())}`, pageWidth / 2, pageHeight - 4, { align: "center" });
+
+  doc.save(`recu-depot-${deposit.firstName}-${deposit.lastName}-${deposit.id.slice(-6)}.pdf`);
+}
+
+/* ─── Reçu PDF — Retrait unique ──────────────────────────────────────────── */
+
+export type WithdrawalReceiptData = ClientWithdrawal & {
+  depositFirstName: string;
+  depositLastName: string;
+  depositPhone: string | null;
+  depositMethod: string;
+  depositAmount: number;
+  depositDate: string;
+};
+
+export function generateWithdrawalReceiptPdf(
+  withdrawal: WithdrawalReceiptData,
+  logoDataUrl?: string,
+  companyInfo?: CompanyInfo
+) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const info = companyInfo ?? getDefaultCompanyInfo();
+  const pageWidth = doc.internalPageSize.getWidth();
+  const pageHeight = doc.internalPageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+
+  // ── En-tête société (logo + infos)
+  let y = drawCompanyHeader(doc, logoDataUrl, companyInfo);
+
+  // ── Titre du reçu
+  y += 4;
+  doc.setFontSize(18);
+  doc.setTextColor(180, 83, 9); // amber-700
+  doc.text("REÇU DE RETRAIT", pageWidth / 2, y, { align: "center" });
+  y += 3;
+
+  // Ligne sous le titre
+  doc.setDrawColor(180, 83, 9);
+  doc.setLineWidth(1);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  // ── N° reçu + date
+  const receiptNum = `RET-${withdrawal.id.slice(-6).toUpperCase()}`;
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`N° Reçu : ${receiptNum}`, margin, y);
+  doc.text(`Date : ${formatDate(new Date().toISOString())}`, pageWidth - margin, y, { align: "right" });
+  y += 10;
+
+  // ── Infos client
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  doc.setFont("helvetica", "bold");
+  doc.text("Informations client", margin, y);
+  y += 2;
+  doc.setDrawColor(200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Nom complet :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(`${withdrawal.depositFirstName} ${withdrawal.depositLastName}`, margin + 40, y);
+  y += 6;
+
+  if (withdrawal.depositPhone) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Téléphone :", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(withdrawal.depositPhone, margin + 40, y);
+    y += 6;
+  }
+
+  y += 4;
+
+  // ── Référence dépôt d'origine
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  doc.setFont("helvetica", "bold");
+  doc.text("Dépôt d'origine", margin, y);
+  y += 2;
+  doc.setDrawColor(200);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Date du dépôt :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(formatDate(withdrawal.depositDate), margin + 45, y);
+  y += 7;
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Montant déposé :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(formatMoney(withdrawal.depositAmount), margin + 45, y);
+  y += 7;
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Mode de paiement :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(PAYMENT_METHOD_LABELS[withdrawal.depositMethod] ?? withdrawal.depositMethod, margin + 45, y);
+  y += 10;
+
+  // ── Détails du retrait
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  doc.setFont("helvetica", "bold");
+  doc.text("Détails du retrait", margin, y);
+  y += 2;
+  doc.setDrawColor(200);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Date du retrait :", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(formatDate(withdrawal.date), margin + 45, y);
+  y += 7;
+
+  if (withdrawal.note) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Motif :", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(withdrawal.note, margin + 45, y, { maxWidth: contentWidth - 45 });
+    y += 7;
+  }
+
+  // ── Montant encadré
+  y += 6;
+  const boxX = margin;
+  const boxY = y;
+  const boxW = contentWidth;
+  const boxH = 22;
+
+  doc.setFillColor(255, 251, 240); // amber-50
+  doc.setDrawColor(180, 83, 9);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(boxX, boxY, boxW, boxH, 3, 3, "FD");
+
+  doc.setFontSize(10);
+  doc.setTextColor(180, 83, 9);
+  doc.setFont("helvetica", "bold");
+  doc.text("MONTANT RETIRÉ", boxX + boxW / 2, boxY + 8, { align: "center" });
+
+  doc.setFontSize(16);
+  doc.text(formatMoney(withdrawal.amount), boxX + boxW / 2, boxY + 17, { align: "center" });
+  y = boxY + boxH + 10;
+
+  // ── Solde restant après retrait
+  const remainingAfter = Math.max(0, withdrawal.depositAmount - withdrawal.amount);
+  doc.setFontSize(10);
+  doc.setTextColor(22, 101, 52);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Solde restant après retrait : ${formatMoney(remainingAfter)}`, margin, y);
+  y += 10;
+
+  // ── Ligne de signature
+  y = Math.max(y, pageHeight - 50);
+  doc.setDrawColor(180);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, margin + 50, y);
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature & Cachet", margin, y + 5);
+
+  // ── Pied de page
+  doc.setFontSize(7);
+  doc.setTextColor(150);
+  doc.text(`${info.name} — ${info.address} — Tél : ${info.phone}`, pageWidth / 2, pageHeight - 8, { align: "center" });
+  doc.text(`Reçu généré le ${formatDate(new Date().toISOString())}`, pageWidth / 2, pageHeight - 4, { align: "center" });
+
+  doc.save(`recu-retrait-${withdrawal.depositFirstName}-${withdrawal.depositLastName}-${withdrawal.id.slice(-6)}.pdf`);
+}
+
 /* ─── Utilitaire : charger le logo en base64 ─────────────────────────────── */
 
 let cachedLogoDataUrl: string | null = null;

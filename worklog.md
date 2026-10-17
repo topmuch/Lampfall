@@ -177,3 +177,22 @@ Stage Summary:
 - Footer includes company name
 - Logo is cached after first load for performance
 - Settings from database take priority over constant defaults
+
+---
+Task ID: 2
+Agent: main
+Task: Add download receipt button to each deposit and withdrawal transaction card
+
+Work Log:
+- Added generateDepositReceiptPdf() to pdf-reports.ts — generates a portrait A4 receipt for a single deposit with company header, client info, transaction details, amount box, withdrawal history, signature line
+- Added generateWithdrawalReceiptPdf() and WithdrawalReceiptData type — generates a portrait A4 receipt for a single withdrawal with company header, client info, deposit reference, withdrawal details, amount box, remaining balance, signature line
+- Updated deposits-clients-view.tsx: added Download icon button to each DepositCard, handleDownloadReceipt function
+- Updated retraits-clients-view.tsx: added Download icon button to each withdrawal card, handleDownloadReceipt function
+- Both receipt PDFs include company logo + info, receipt number (DPT-xxx / RET-xxx), client name & phone, transaction details, framed amount, signature area
+- Lint passes cleanly, no TS errors in view components
+
+Stage Summary:
+- Each deposit card now has a green download button that generates a "REÇU DE DÉPÔT" PDF receipt
+- Each withdrawal card now has an amber download button that generates a "REÇU DE RETRAIT" PDF receipt
+- Receipts include full company branding (logo + info) and serve as proof/quittance for clients
+- Receipt format: portrait A4 with sections for company header, client info, transaction details, amount box, signature line
