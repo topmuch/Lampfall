@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -24,8 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useFetch } from "@/hooks/use-fetch";
 import { authFetch } from "@/lib/auth-client";
@@ -307,6 +307,145 @@ function AddWithdrawalForm({
   );
 }
 
+/* ─── Formulaire de retrait depuis l'onglet Retraits ─────────────────────── */
+
+function WithdrawalDepositPicker({
+  deposits,
+  onDone,
+}: {
+  deposits: ClientDeposit[];
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [note, setNote] = useState("");
+
+  const eligible = deposits.filter((d) => getDepositStatus(d) !== "SOLDE");
+  const selectedDeposit = deposits.find((d) => d.id === selectedId);
+  const maxAmount = selectedDeposit ? getRemaining(selectedDeposit) : 0;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedId) {
+      toast({ title: "Sélectionnez un dépôt", variant: "destructive" });
+      return;
+    }
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast({ title: "Montant invalide", variant: "destructive" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/client-deposits/${selectedId}/withdrawals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: n, date, note: note.trim() }),
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error ?? "Erreur");
+      }
+      toast({ title: "Retrait enregistré" });
+      setSelectedId("");
+      setAmount("");
+      setNote("");
+      setDate(todayISO());
+      onDone();
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: err instanceof Error ? err.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="border-amber-500/20">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ArrowUpFromLine className="h-4 w-4 text-amber-600" />
+          Nouveau retrait
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="w-deposit">Dépôt (client)</Label>
+            <Select value={selectedId} onValueChange={setSelectedId}>
+              <SelectTrigger id="w-deposit">
+                <SelectValue placeholder="Choisir un dépôt…" />
+              </SelectTrigger>
+              <SelectContent>
+                {eligible.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.firstName} {d.lastName} — {formatMoney(getRemaining(d))} restant
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="w-date">Date</Label>
+            <Input
+              id="w-date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="w-amount">Montant retiré (FCFA)</Label>
+            <Input
+              id="w-amount"
+              type="number"
+              min={1}
+              max={maxAmount ? Math.round(maxAmount) : undefined}
+              step={1}
+              placeholder={maxAmount ? `max ${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(maxAmount)}` : "—"}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              disabled={!selectedId}
+            />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
+            <Label htmlFor="w-note">Note</Label>
+            <Input
+              id="w-note"
+              placeholder="Motif du retrait"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3 flex justify-end pt-1">
+            <Button
+              type="submit"
+              disabled={saving || !selectedId || !amount}
+              className="min-w-40 bg-amber-600 hover:bg-amber-700"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <ArrowUpFromLine className="h-4 w-4" aria-hidden />
+              )}
+              Enregistrer le retrait
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ─── Carte d'un dépôt ────────────────────────────────────────────────────── */
 
 function DepositCard({
@@ -410,7 +549,6 @@ function DepositCard({
 
           {showWithdrawals && (
             <div className="mt-2 space-y-2">
-              {/* Liste des retraits existants */}
               {deposit.withdrawals && deposit.withdrawals.length > 0 ? (
                 <div className="space-y-1">
                   {deposit.withdrawals.map((w) => (
@@ -430,7 +568,6 @@ function DepositCard({
                 <p className="text-xs text-muted-foreground italic">Aucun retrait</p>
               )}
 
-              {/* Formulaire d'ajout de retrait */}
               {status !== "SOLDE" && (
                 <div className="pt-1">
                   <AddWithdrawalForm
@@ -448,11 +585,124 @@ function DepositCard({
   );
 }
 
+/* ─── Onglet Retraits — vue dédiée ───────────────────────────────────────── */
+
+function RetraitsTab({
+  deposits,
+  onRefresh,
+}: {
+  deposits: ClientDeposit[];
+  onRefresh: () => void;
+}) {
+  // Aplatir tous les retraits avec les infos du dépôt parent
+  const allWithdrawals = useMemo(() => {
+    const list: (ClientWithdrawal & {
+      depositFirstName: string;
+      depositLastName: string;
+      depositPhone: string | null;
+      depositMethod: string;
+      depositAmount: number;
+    })[] = [];
+    for (const d of deposits) {
+      if (d.withdrawals) {
+        for (const w of d.withdrawals) {
+          list.push({
+            ...w,
+            depositFirstName: d.firstName,
+            depositLastName: d.lastName,
+            depositPhone: d.phone ?? null,
+            depositMethod: d.method,
+            depositAmount: d.amount,
+          });
+        }
+      }
+    }
+    // Trier par date décroissante
+    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return list;
+  }, [deposits]);
+
+  // Export Excel retraits
+  const exportExcel = async () => {
+    try {
+      const XLSX = await import("xlsx");
+      const rows = allWithdrawals.map((w) => ({
+        "Prénom client": w.depositFirstName,
+        "Nom client": w.depositLastName,
+        Téléphone: w.depositPhone || "",
+        "Date retrait": formatDate(w.date),
+        "Montant retiré": w.amount,
+        Note: w.note || "",
+        "Dépôt d'origine": w.depositAmount,
+        "Mode dépôt": PAYMENT_METHOD_LABELS[w.depositMethod] ?? w.depositMethod,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Retraits");
+      XLSX.writeFile(wb, `retraits-clients.xlsx`);
+    } catch {
+      /* silencieux */
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Formulaire nouveau retrait */}
+      <WithdrawalDepositPicker deposits={deposits} onDone={onRefresh} />
+
+      {/* Export */}
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={exportExcel} disabled={!allWithdrawals.length}>
+          <Download className="h-4 w-4 mr-1.5" />
+          Exporter Excel
+        </Button>
+      </div>
+
+      {/* Liste des retraits */}
+      {allWithdrawals.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <ArrowUpFromLine className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p>Aucun retrait enregistré</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {allWithdrawals.map((w) => (
+            <Card key={w.id} className="overflow-hidden">
+              <CardContent className="p-3.5 flex flex-wrap items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 shrink-0">
+                  <ArrowUpFromLine className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm">
+                    {w.depositFirstName} {w.depositLastName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {w.depositPhone && <span>{w.depositPhone} · </span>}
+                    Retrait du {formatDate(w.date)}
+                    {w.note && <span> · {w.note}</span>}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-amber-600">{formatMoney(w.amount)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    dépôt {formatMoney(w.depositAmount)} · {PAYMENT_METHOD_LABELS[w.depositMethod] ?? w.depositMethod}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Vue principale ──────────────────────────────────────────────────────── */
 
 export function DepositsClientsView() {
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [filter, setFilter] = useState<"ALL" | "SOLDE" | "PARTIEL" | "NON_RETIREE">("ALL");
+  const [tab, setTab] = useState("depots");
 
   const { data: deposits, loading, error, refetch } = useFetch<ClientDeposit[]>(
     `/api/client-deposits?year=${year}`
@@ -491,7 +741,7 @@ export function DepositsClientsView() {
     });
   }, [deposits, filter]);
 
-  // Export Excel
+  // Export Excel dépôts
   const exportExcel = async () => {
     try {
       const XLSX = await import("xlsx");
@@ -526,6 +776,12 @@ export function DepositsClientsView() {
   // Années disponibles
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => String(currentYear - i));
+
+  // Nombre de retraits total (pour le badge de l'onglet)
+  const withdrawalCount = useMemo(() => {
+    if (!deposits) return 0;
+    return deposits.reduce((sum, d) => sum + (d.withdrawals?.length ?? 0), 0);
+  }, [deposits]);
 
   return (
     <div className="space-y-5">
@@ -597,62 +853,99 @@ export function DepositsClientsView() {
         </Card>
       </div>
 
-      {/* Formulaire nouveau dépôt */}
-      <NewDepositForm onCreated={refetch} />
+      {/* Onglets Dépôts / Retraits */}
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-1">
+          <TabsTrigger value="depots" className="gap-1.5">
+            <ArrowDownToLine className="h-3.5 w-3.5" />
+            Dépôts
+          </TabsTrigger>
+          <TabsTrigger value="retraits" className="gap-1.5">
+            <ArrowUpFromLine className="h-3.5 w-3.5" />
+            Retraits
+            {withdrawalCount > 0 && (
+              <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+                {withdrawalCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filtres + export */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          {(["ALL", "NON_RETIREE", "PARTIEL", "SOLDE"] as const).map((f) => {
-            const label =
-              f === "ALL"
-                ? "Tous"
-                : f === "SOLDE"
-                ? "Soldés"
-                : f === "PARTIEL"
-                ? "Retrait partiel"
-                : "Non retirés";
-            return (
-              <Button
-                key={f}
-                variant={filter === f ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter(f)}
-                className={filter === f ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {label}
-              </Button>
-            );
-          })}
-        </div>
-        <Button variant="outline" size="sm" onClick={exportExcel} disabled={!filtered?.length}>
-          <Download className="h-4 w-4 mr-1.5" />
-          Exporter Excel
-        </Button>
-      </div>
+        {/* ─── Onglet Dépôts ──────────────────────────────────────────────── */}
+        <TabsContent value="depots">
+          {/* Formulaire nouveau dépôt */}
+          <NewDepositForm onCreated={refetch} />
 
-      {/* Liste des dépôts */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
-      {error && (
-        <p className="text-center text-destructive py-8">{error}</p>
-      )}
-      {!loading && !error && filtered?.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <Wallet className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>Aucun dépôt client pour {year}</p>
-        </div>
-      )}
-      {!loading && !error && filtered && filtered.length > 0 && (
-        <div className="space-y-3">
-          {filtered.map((d) => (
-            <DepositCard key={d.id} deposit={d} onRefresh={refetch} />
-          ))}
-        </div>
-      )}
+          {/* Filtres + export */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
+            <div className="flex items-center gap-1.5">
+              {(["ALL", "NON_RETIREE", "PARTIEL", "SOLDE"] as const).map((f) => {
+                const label =
+                  f === "ALL"
+                    ? "Tous"
+                    : f === "SOLDE"
+                    ? "Soldés"
+                    : f === "PARTIEL"
+                    ? "Retrait partiel"
+                    : "Non retirés";
+                return (
+                  <Button
+                    key={f}
+                    variant={filter === f ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilter(f)}
+                    className={filter === f ? "bg-green-600 hover:bg-green-700" : ""}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button variant="outline" size="sm" onClick={exportExcel} disabled={!filtered?.length}>
+              <Download className="h-4 w-4 mr-1.5" />
+              Exporter Excel
+            </Button>
+          </div>
+
+          {/* Liste des dépôts */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {error && (
+            <p className="text-center text-destructive py-8">{error}</p>
+          )}
+          {!loading && !error && filtered?.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <Wallet className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p>Aucun dépôt client pour {year}</p>
+            </div>
+          )}
+          {!loading && !error && filtered && filtered.length > 0 && (
+            <div className="space-y-3 mt-3">
+              {filtered.map((d) => (
+                <DepositCard key={d.id} deposit={d} onRefresh={refetch} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── Onglet Retraits ────────────────────────────────────────────── */}
+        <TabsContent value="retraits">
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {error && (
+            <p className="text-center text-destructive py-8">{error}</p>
+          )}
+          {!loading && !error && deposits && (
+            <RetraitsTab deposits={deposits} onRefresh={refetch} />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
