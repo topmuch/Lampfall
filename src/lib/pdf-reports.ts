@@ -140,7 +140,7 @@ function drawCompanyHeader(
 
   // Infos société à droite du logo (ou en haut si pas de logo)
   const textX = logoWidth > 0 ? 14 + logoWidth + 4 : 14;
-  const maxTextWidth = logoWidth > 0 ? doc.internalPageSize.getWidth() - textX - 14 : doc.internalPageSize.getWidth() - 28;
+  const maxTextWidth = logoWidth > 0 ? doc.internal.pageSize.getWidth() - textX - 14 : doc.internal.pageSize.getWidth() - 28;
 
   doc.setFontSize(14);
   doc.setTextColor(22, 101, 52); // green-700
@@ -166,7 +166,7 @@ function drawCompanyHeader(
   const headerBottom = currentY + (logoWidth > 0 ? 32 : 30);
   doc.setDrawColor(22, 101, 52);
   doc.setLineWidth(0.5);
-  doc.line(14, headerBottom, doc.internalPageSize.getWidth() - 14, headerBottom);
+  doc.line(14, headerBottom, doc.internal.pageSize.getWidth() - 14, headerBottom);
 
   return headerBottom + 4; // Y position après l'en-tête
 }
@@ -257,7 +257,7 @@ export function generateDepositsPdf(
   });
 
   // Pied de page
-  const pageHeight = doc.internalPageSize.getHeight();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const info = companyInfo ?? getDefaultCompanyInfo();
   doc.setFontSize(8);
   doc.setTextColor(150);
@@ -351,7 +351,7 @@ export function generateWithdrawalsPdf(
   });
 
   // Pied de page
-  const pageHeight = doc.internalPageSize.getHeight();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const info = companyInfo ?? getDefaultCompanyInfo();
   doc.setFontSize(8);
   doc.setTextColor(150);
@@ -374,8 +374,8 @@ export function generateDepositReceiptPdf(
 ) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const info = companyInfo ?? getDefaultCompanyInfo();
-  const pageWidth = doc.internalPageSize.getWidth();
-  const pageHeight = doc.internalPageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
   const contentWidth = pageWidth - margin * 2;
 
@@ -578,8 +578,8 @@ export function generateWithdrawalReceiptPdf(
 ) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const info = companyInfo ?? getDefaultCompanyInfo();
-  const pageWidth = doc.internalPageSize.getWidth();
-  const pageHeight = doc.internalPageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
   const contentWidth = pageWidth - margin * 2;
 
