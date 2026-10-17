@@ -32,6 +32,7 @@ import {
   Truck,
   Users2,
   Wallet,
+  ArrowUpFromLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CategoriesProvider } from "@/components/categories-provider";
@@ -52,6 +53,7 @@ import { SettingsView } from "@/components/settings-view";
 import { LoginView } from "@/components/login-view";
 import { MaintenanceScreen } from "@/components/maintenance-screen";
 import { DepositsClientsView } from "@/components/deposits-clients-view";
+import { RetraitsClientsView } from "@/components/retraits-clients-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useSettingsStore } from "@/lib/settings-store";
 import { authFetch, clearSession, getCachedUser, verifySession } from "@/lib/auth-client";
@@ -66,6 +68,7 @@ type ViewId =
   | "clients"
   | "situation"
   | "depots"
+  | "retraits"
   | "rapports"
   | "achats"
   | "fournisseurs"
@@ -94,7 +97,8 @@ const NAV: {
   { id: "commandes", label: "Commandes prévisionnelles", short: "Commandes", icon: ClipboardList, section: "Ventes" },
   { id: "clients", label: "Clients", short: "Clients", icon: Users2, section: "Ventes" },
   { id: "situation", label: "Situation client", short: "Situation", icon: FileSearch, section: "Ventes" },
-  { id: "depots", label: "Dépôts clients", short: "Dépôts clients", icon: Wallet, section: "Ventes" },
+  { id: "depots", label: "Dépôts clients", short: "Dépôts", icon: Wallet, section: "Ventes" },
+  { id: "retraits", label: "Retraits clients", short: "Retraits", icon: ArrowUpFromLine, section: "Ventes" },
   // ─── Crédits (achats à crédit) ───
   { id: "commercant", label: "Commerçant — Achats à crédit", short: "Commerçant", icon: Store, section: "Crédits" },
   { id: "immo", label: "Immo — Achats à crédit", short: "Immo", icon: Building2, section: "Crédits" },
@@ -487,6 +491,7 @@ export function AppShell() {
               {view === "clients" && <ClientsView />}
               {view === "situation" && <SituationClientView />}
               {view === "depots" && <DepositsClientsView />}
+              {view === "retraits" && <RetraitsClientsView />}
               {view === "rapports" && <ReportsView />}
               {view === "produits" && <ProductsView />}
               {view === "mouvements" && <StockMovementsView />}

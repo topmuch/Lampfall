@@ -99,3 +99,25 @@ Work Log:
 Stage Summary:
 - All API endpoints verified working correctly
 -BFeature fully functional matching the PDF specification
+---
+Task ID: 1
+Agent: main
+Task: Split Dépôts/Retraits into separate navigation tabs with distinct bold colors and totals at bottom
+
+Work Log:
+- Read and analyzed existing deposits-clients-view.tsx (952 lines with inner Tabs)
+- Read and analyzed app-shell.tsx (navigation shell)
+- Updated app-shell.tsx: Added "retraits" to ViewId, nav entry with ArrowUpFromLine icon, imported RetraitsClientsView
+- Rewrote deposits-clients-view.tsx: Removed inner Tabs, made deposits-only view with bold green theme, added "Total déposé" sticky footer, bold font-extrabold labels, green color coding throughout
+- Created retraits-clients-view.tsx: Standalone withdrawals view with bold amber/orange theme, "Total retiré" sticky footer at bottom, search by name/phone, WithdrawalDepositPicker form, Excel export
+- Created separator.tsx shadcn component manually
+- Verified lint passes cleanly
+- Verified API endpoints return correct data (3 deposits, totals match)
+
+Stage Summary:
+- Two separate navigation tabs: "Dépôts" (green, Wallet icon) and "Retraits" (amber, ArrowUpFromLine icon)
+- Dépôts tab: Bold green theme, deposit list with history, inline withdrawal form, "Total déposé" at bottom
+- Retraits tab: Bold amber/orange theme, all withdrawals listed with deposit info, search, "Total retiré" at bottom
+- Both tabs have distinct visual identity with different colors and bold typography
+- Excel export works for both tabs
+- API verified: 3 deposits, Total déposé: 450,000 FCFA, Total retiré: 130,000 FCFA

@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  allowedDevOrigins: [
+    "http://21.0.16.170:81",
+  ],
 };
 
 export default nextConfig;
