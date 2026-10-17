@@ -214,23 +214,19 @@ export function RetraitsClientsView() {
   };
 
   const handleDownloadReceipt = async (w: WithdrawalReceiptData) => {
-    try {
-      const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
-      const companyInfo: CompanyInfo = settings
-        ? {
-            name: settings.nomSociete || COMPANY.name,
-            tagline: settings.tagline || COMPANY.tagline,
-            address: settings.adresse || COMPANY.address,
-            phone: settings.telephone || COMPANY.phone,
-            email: settings.email || COMPANY.email,
-            rc: settings.rc || undefined,
-            ninea: settings.ninea || undefined,
-          }
-        : getDefaultCompanyInfo();
-      generateWithdrawalReceiptPdf(w, logoDataUrl, companyInfo);
-    } catch {
-      /* silencieux */
-    }
+    const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
+    const companyInfo: CompanyInfo = settings
+      ? {
+          name: settings.nomSociete || COMPANY.name,
+          tagline: settings.tagline || COMPANY.tagline,
+          address: settings.adresse || COMPANY.address,
+          phone: settings.telephone || COMPANY.phone,
+          email: settings.email || COMPANY.email,
+          rc: settings.rc || undefined,
+          ninea: settings.ninea || undefined,
+        }
+      : getDefaultCompanyInfo();
+    generateWithdrawalReceiptPdf(w, logoDataUrl, companyInfo);
   };
 
   const clearSearch = () => { setSearch(""); setSearchDateFrom(""); setSearchDateTo(""); };
@@ -345,7 +341,15 @@ export function RetraitsClientsView() {
                   <p className="text-base font-extrabold text-amber-600">{formatMoney(w.amount)}</p>
                   <p className="text-[10px] text-muted-foreground">dépôt {formatMoney(w.depositAmount)} · {PAYMENT_METHOD_LABELS[w.depositMethod] ?? w.depositMethod}</p>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-600/10 shrink-0" onClick={() => handleDownloadReceipt(w)} aria-label="Télécharger le reçu"><Download className="h-4 w-4" /></Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 border-amber-500/40 text-amber-700 hover:bg-amber-600/10 hover:text-amber-800 font-bold text-xs px-3 shrink-0"
+                  onClick={() => handleDownloadReceipt(w)}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Reçu
+                </Button>
               </CardContent>
             </Card>
           ))}

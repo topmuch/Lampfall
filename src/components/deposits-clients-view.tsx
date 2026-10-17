@@ -225,9 +225,10 @@ function AddWithdrawalForm({ depositId, maxAmount, onDone }: { depositId: string
 
 /* ─── Carte d'un dépôt ──────────────────────────────────────────────────── */
 
-function DepositCard({ deposit, onRefresh, onDownloadReceipt }: { deposit: ClientDeposit; onRefresh: () => void; onDownloadReceipt: (deposit: ClientDeposit) => void }) {
+function DepositCard({ deposit, onRefresh, onDownloadReceipt }: { deposit: ClientDeposit; onRefresh: () => void; onDownloadReceipt: (deposit: ClientDeposit) => Promise<void> }) {
   const { toast } = useToast();
   const [showWithdrawals, setShowWithdrawals] = useState(true);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const status = getDepositStatus(deposit);
   const remaining = getRemaining(deposit);
   const totalWithdrawn = deposit.withdrawals ? deposit.withdrawals.reduce((sum, w) => sum + w.amount, 0) : 0;
@@ -256,7 +257,16 @@ function DepositCard({ deposit, onRefresh, onDownloadReceipt }: { deposit: Clien
               <p className="text-xs text-muted-foreground">{deposit.phone && <span>{deposit.phone} · </span>}{formatDate(deposit.date)} · {PAYMENT_METHOD_LABELS[deposit.method] ?? deposit.method}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">{statusBadge}<Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-600/10" onClick={() => onDownloadReceipt(deposit)} aria-label="Télécharger le reçu"><Download className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={handleDelete} aria-label="Supprimer"><Trash2 className="h-3.5 w-3.5" /></Button></div>
+          <div className="flex items-center gap-2">{statusBadge}<Button
+                variant="outline"
+                size="sm"
+                disabled={receiptLoading}
+                className="h-7 gap-1.5 border-green-600/40 text-green-700 hover:bg-green-600/10 hover:text-green-800 font-bold text-xs px-2.5"
+                onClick={async () => { setReceiptLoading(true); try { await onDownloadReceipt(deposit); } catch { toast({ title: "Erreur de génération", variant: "destructive" }); } finally { setReceiptLoading(false); } }}
+              >
+                {receiptLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                Reçu
+              </Button><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={handleDelete} aria-label="Supprimer"><Trash2 className="h-3.5 w-3.5" /></Button></div>
         </div>
         <div className="flex items-center gap-2 bg-green-600/5 rounded-lg px-3 py-2">
           <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Déposé</span>
@@ -399,23 +409,19 @@ export function DepositsClientsView() {
   };
 
   const handleDownloadReceipt = async (deposit: ClientDeposit) => {
-    try {
-      const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
-      const companyInfo: CompanyInfo = settings
-        ? {
-            name: settings.nomSociete || COMPANY.name,
-            tagline: settings.tagline || COMPANY.tagline,
-            address: settings.adresse || COMPANY.address,
-            phone: settings.telephone || COMPANY.phone,
-            email: settings.email || COMPANY.email,
-            rc: settings.rc || undefined,
-            ninea: settings.ninea || undefined,
-          }
-        : getDefaultCompanyInfo();
-      generateDepositReceiptPdf(deposit, logoDataUrl, companyInfo);
-    } catch {
-      /* silencieux */
-    }
+    const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
+    const companyInfo: CompanyInfo = settings
+      ? {
+          name: settings.nomSociete || COMPANY.name,
+          tagline: settings.tagline || COMPANY.tagline,
+          address: settings.adresse || COMPANY.address,
+          phone: settings.telephone || COMPANY.phone,
+          email: settings.email || COMPANY.email,
+          rc: settings.rc || undefined,
+          ninea: settings.ninea || undefined,
+        }
+      : getDefaultCompanyInfo();
+    generateDepositReceiptPdf(deposit, logoDataUrl, companyInfo);
   };
 
   const clearSearch = () => { setSearch(""); setSearchDateFrom(""); setSearchDateTo(""); };
