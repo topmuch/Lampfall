@@ -9,7 +9,7 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatDate, formatMoney, PAYMENT_METHOD_LABELS, COMPANY } from "@/lib/constants";
+import { formatDate, PAYMENT_METHOD_LABELS, COMPANY } from "@/lib/constants";
 import type { ClientDeposit, ClientWithdrawal } from "@/lib/types";
 
 /* ─── Police identique aux factures (pdf.ts) ──────────────────────────────── */
@@ -31,6 +31,22 @@ const AMBER = [180, 83, 9] as const;
 const GRAY = [105, 112, 108] as const;
 const DARK = [35, 45, 40] as const;
 
+/* ─── Formatage monétaire identique aux factures (pdf.ts) ─────────────────── */
+/* Intl.NumberFormat(« fr-FR ») insère des espaces insécables (\u00A0) que    */
+/* jsPDF ne sait pas rendre → elles s'affichent comme « / ». On utilise       */
+/* donc un formatage manuel avec des espaces normales, comme pdf.ts.           */
+
+function fmtNum(n: number): string {
+  const rounded = Math.round(n * 100) / 100;
+  const [int, dec] = rounded.toString().split(".");
+  const withSpaces = int.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return dec ? `${withSpaces},${dec}` : withSpaces;
+}
+
+function fmtMoney(n: number): string {
+  return `${fmtNum(n)} FCFA`;
+}
+
 /* ─── Sanitisation du texte pour jsPDF ────────────────────────────────────── */
 
 /**
@@ -47,7 +63,8 @@ function t(str: string): string {
     .replace(/\u00C6/g, "AE")         // Æ → AE
     .replace(/\u00E6/g, "ae")         // æ → ae
     .replace(/\u00DF/g, "ss")         // ß → ss
-    .replace(/'/g, "'");              // Apostrophe courbe → droite
+    .replace(/'/g, "'")              // Apostrophe courbe → droite
+    .replace(/\u00A0/g, " ");          // Espace insécable → espace normale
 }
 
 /* ─── Infos société pour le PDF ──────────────────────────────────────────── */
@@ -292,11 +309,11 @@ export function generateDepositsPdf(
   doc.setFont(FONT.name, FONT.bold);
   doc.setFontSize(10 * K);
   doc.setTextColor(...GREEN);
-  doc.text(t(`Total depose : ${formatMoney(totalDeposed)}`), 14, y);
+  doc.text(t(`Total depose : ${fmtMoney(totalDeposed)}`), 14, y);
   doc.setTextColor(...AMBER);
-  doc.text(t(`Total retire : ${formatMoney(totalWithdrawn)}`), 100, y);
+  doc.text(t(`Total retire : ${fmtMoney(totalWithdrawn)}`), 100, y);
   doc.setTextColor(5, 150, 105);
-  doc.text(t(`Solde a rendre : ${formatMoney(balance)}`), 200, y);
+  doc.text(t(`Solde a rendre : ${fmtMoney(balance)}`), 200, y);
   y += 6;
 
   // Tableau
@@ -309,10 +326,10 @@ export function generateDepositsPdf(
       t(`${d.firstName} ${d.lastName}`),
       d.phone || "-",
       formatDate(d.date),
-      formatMoney(d.amount),
+      fmtMoney(d.amount),
       t(PAYMENT_METHOD_LABELS[d.method] ?? d.method),
-      formatMoney(tw),
-      formatMoney(rem),
+      fmtMoney(tw),
+      fmtMoney(rem),
       t(status),
     ];
   });
@@ -395,7 +412,7 @@ export function generateWithdrawalsPdf(
   doc.setFont(FONT.name, FONT.bold);
   doc.setFontSize(10 * K);
   doc.setTextColor(...AMBER);
-  doc.text(t(`Total retire : ${formatMoney(totalWithdrawn)}`), 14, y);
+  doc.text(t(`Total retire : ${fmtMoney(totalWithdrawn)}`), 14, y);
   doc.text(t(`${filtered.length} retrait(s)`), 100, y);
   y += 6;
 
@@ -404,9 +421,9 @@ export function generateWithdrawalsPdf(
     t(`${w.depositFirstName} ${w.depositLastName}`),
     w.depositPhone || "-",
     formatDate(w.date),
-    formatMoney(w.amount),
+    fmtMoney(w.amount),
     t(w.note || "-"),
-    formatMoney(w.depositAmount),
+    fmtMoney(w.depositAmount),
     t(PAYMENT_METHOD_LABELS[w.depositMethod] ?? w.depositMethod),
     formatDate(w.depositDate),
   ]);
@@ -538,7 +555,7 @@ export function generateDepositReceiptPdf(
     y += rowH;
   };
 
-  totalRow(t("Montant depose"), formatMoney(deposit.amount), {
+  totalRow(t("Montant depose"), fmtMoney(deposit.amount), {
     bold: true,
     color: GREEN as unknown as number[],
     fill: GREEN_BG as unknown as number[],
@@ -554,11 +571,11 @@ export function generateDepositReceiptPdf(
     doc.setLineWidth(0.4);
     doc.line(totalsX, y - 5.3, pageWidth - margin, y - 5.3);
 
-    totalRow(t("Total retire"), formatMoney(totalWithdrawn), {
+    totalRow(t("Total retire"), fmtMoney(totalWithdrawn), {
       color: AMBER as unknown as number[],
     });
 
-    totalRow(t("Solde restant"), formatMoney(remaining), {
+    totalRow(t("Solde restant"), fmtMoney(remaining), {
       bold: true,
       color: GREEN as unknown as number[],
     });
@@ -572,7 +589,7 @@ export function generateDepositReceiptPdf(
         head: [[t("Date"), t("Montant retire"), t("Note")]],
         body: deposit.withdrawals.map((w) => [
           formatDate(w.date),
-          formatMoney(w.amount),
+          fmtMoney(w.amount),
           t(w.note || "-"),
         ]),
         styles: {
@@ -703,7 +720,7 @@ export function generateWithdrawalReceiptPdf(
   doc.setFont(FONT.name, FONT.bold);
   doc.text(t("Montant depose :"), margin, y);
   doc.setFont(FONT.name, FONT.normal);
-  doc.text(formatMoney(withdrawal.depositAmount), margin + 50, y);
+  doc.text(fmtMoney(withdrawal.depositAmount), margin + 50, y);
   y += 7;
 
   doc.setFont(FONT.name, FONT.bold);
@@ -755,7 +772,7 @@ export function generateWithdrawalReceiptPdf(
   };
 
   // Montant retiré — même style que TOTAL TTC sur facture (fond vert, texte vert, gras)
-  totalRow(t("Montant retire"), formatMoney(withdrawal.amount), {
+  totalRow(t("Montant retire"), fmtMoney(withdrawal.amount), {
     bold: true,
     color: GREEN as unknown as number[],
     fill: GREEN_BG as unknown as number[],
@@ -767,7 +784,7 @@ export function generateWithdrawalReceiptPdf(
   doc.setLineWidth(0.4);
   doc.line(totalsX, y - 5.3, pageWidth - margin, y - 5.3);
 
-  totalRow(t("Solde restant"), formatMoney(remainingAfter), {
+  totalRow(t("Solde restant"), fmtMoney(remainingAfter), {
     bold: true,
     color: remainingAfter > 0 ? (AMBER as unknown as number[]) : (GREEN as unknown as number[]),
   });
