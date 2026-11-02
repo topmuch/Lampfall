@@ -12,8 +12,10 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import {
   ArrowLeftRight,
   BarChart3,
+  Boxes,
   Building2,
   ChevronDown,
+  ClipboardCheck,
   ClipboardList,
   FileSearch,
   FileSignature,
@@ -41,6 +43,8 @@ import { InvoicesView } from "@/components/invoices-view";
 import { ClientsView } from "@/components/clients-view";
 import { SituationClientView } from "@/components/situation-client-view";
 import { ProductsView } from "@/components/products-view";
+import { StockView } from "@/components/stock-view";
+import { InventoryView } from "@/components/inventory-view";
 import { PurchasesView } from "@/components/purchases-view";
 import { OrdersView } from "@/components/orders-view";
 import { CreditPurchasesView } from "@/components/credit-purchases-view";
@@ -74,6 +78,8 @@ type ViewId =
   | "fournisseurs"
   | "commercant"
   | "produits"
+  | "stock"
+  | "inventaire"
   | "mouvements"
   | "immo"
   | "utilisateurs"
@@ -106,6 +112,8 @@ const NAV: {
   { id: "achats", label: "Factures d'achat", short: "Achats", icon: ShoppingBag, section: "Achats & stock" },
   { id: "fournisseurs", label: "Fournisseurs", short: "Fournisseurs", icon: Truck, section: "Achats & stock" },
   { id: "produits", label: "Produits & stock", short: "Produits", icon: Package, section: "Achats & stock" },
+  { id: "stock", label: "État du stock", short: "Stock", icon: Boxes, section: "Achats & stock" },
+  { id: "inventaire", label: "Inventaire", short: "Inventaire", icon: ClipboardCheck, section: "Achats & stock" },
   { id: "mouvements", label: "Mouvements de stock", short: "Mouvements", icon: ArrowLeftRight, section: "Achats & stock" },
   // ─── Administration (admin uniquement) ───
   { id: "utilisateurs", label: "Utilisateurs & rôles", short: "Utilisateurs", icon: ShieldCheck, section: "Administration", adminOnly: true },
@@ -494,6 +502,8 @@ export function AppShell() {
               {view === "retraits" && <RetraitsClientsView />}
               {view === "rapports" && <ReportsView />}
               {view === "produits" && <ProductsView />}
+              {view === "stock" && <StockView />}
+              {view === "inventaire" && <InventoryView />}
               {view === "mouvements" && <StockMovementsView />}
               {view === "immo" && <CreditPurchasesView destination="IMMO" />}
               {view === "utilisateurs" && (isAdmin ? <UsersView currentUser={user} /> : <RestrictedCard />)}

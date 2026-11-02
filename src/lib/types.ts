@@ -186,6 +186,84 @@ export interface StockMovement {
   createdAt: string;
 }
 
+// ─── Inventaire / État du stock ─────────────────────────────────────────────
+
+/** Ligne inventaire d'un produit sur une période donnée */
+export interface InventoryProductRow {
+  productId: string;
+  name: string;
+  reference?: string | null;
+  category: string;
+  categoryLabel: string;
+  unit: string;
+  minStock: number;
+  purchasePrice: number;
+  salePrice: number;
+  /** Stock en début de période (rejoué depuis le journal des mouvements) */
+  stockInitial: number;
+  /** Quantités achetées sur la période (entrées refType=ACHAT) */
+  achats: number;
+  /** Quantités vendues sur la période (sorties refType=VENTE) */
+  ventes: number;
+  /** Retours + ajustements + entrées initiales (signé) */
+  retoursAjustements: number;
+  /** Stock final = initial + achats − ventes + retours/ajustements */
+  stockFinal: number;
+  /** Stock réel actuel du produit (référence) */
+  currentStock: number;
+  /** stockFinal × prix d'achat */
+  valeurStockAchat: number;
+  /** stockFinal × prix de vente */
+  valeurStockVente: number;
+  /** ventes × prix de vente */
+  ventesValeur: number;
+  /** ventes × (prix de vente − prix d'achat) */
+  marge: number;
+}
+
+/** Agrégat inventaire d'une catégorie (avec détail produits) */
+export interface InventoryCategoryRow {
+  category: string;
+  label: string;
+  productCount: number;
+  stockInitial: number;
+  achats: number;
+  ventes: number;
+  retoursAjustements: number;
+  stockFinal: number;
+  valeurStockAchat: number;
+  valeurStockVente: number;
+  ventesValeur: number;
+  marge: number;
+  products: InventoryProductRow[];
+}
+
+/** Réponse de l'API /api/inventory */
+export interface InventoryResponse {
+  period: {
+    type: "semaine" | "mensuel" | "trimestriel" | "semestriel" | "annuel";
+    label: string;
+    startDate: string;
+    endDate: string;
+    startLabel: string;
+    endLabel: string;
+  };
+  products: InventoryProductRow[];
+  categories: InventoryCategoryRow[];
+  totals: {
+    productCount: number;
+    stockInitial: number;
+    achats: number;
+    ventes: number;
+    retoursAjustements: number;
+    stockFinal: number;
+    valeurStockAchat: number;
+    valeurStockVente: number;
+    ventesValeur: number;
+    marge: number;
+  };
+}
+
 export interface AuditLogEntry {
   id: string;
   userId?: string | null;
