@@ -237,6 +237,9 @@ export function generateInventoryPdf(options: InventoryPdfOptions) {
   autoTable(doc, {
     startY: y,
     margin: { left: 14, right: 14, top: 12, bottom: 12 },
+    // ─── Typographie identique au tableau des factures (pdf.ts) ──────────────
+    // theme « grid » + ligne fine grise + Times italique ×1,25 + taille 8,5×K.
+    theme: "grid",
     head: [
       grouped
         ? [
@@ -268,48 +271,55 @@ export function generateInventoryPdf(options: InventoryPdfOptions) {
     styles: {
       font: FONT.name,
       fontStyle: FONT.normal,
-      fontSize: 7.5 * K,
+      fontSize: 8.5 * K,
       textColor: DARK as unknown as number[],
-      cellPadding: 1.6,
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
+      cellPadding: { top: 2 * K, right: 2.5, bottom: 2 * K, left: 2.5 },
       valign: "middle",
     },
     headStyles: {
       fillColor: GREEN as unknown as number[],
       textColor: [255, 255, 255],
       fontStyle: FONT.bold,
-      fontSize: 7.5 * K,
+      fontSize: 8.5 * K,
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
       halign: "center",
     },
     footStyles: {
       fillColor: GREEN as unknown as number[],
       textColor: [255, 255, 255],
       fontStyle: FONT.bold,
-      fontSize: 7.5 * K,
+      fontSize: 8.5 * K,
+      lineColor: [210, 218, 213],
+      lineWidth: 0.15,
     },
     alternateRowStyles: { fillColor: GREEN_BG as unknown as number[] },
+    // Colonnes clés en gras comme la facture (Désignation / Total)
     columnStyles: grouped
       ? {
-          0: { cellWidth: 72 },
+          0: { cellWidth: 64 },
           1: { halign: "right", cellWidth: 24 },
           2: { halign: "right", cellWidth: 22 },
           3: { halign: "right", cellWidth: 22 },
           4: { halign: "right", cellWidth: 26 },
-          5: { halign: "right", cellWidth: 24 },
-          6: { halign: "right", cellWidth: 26 },
-          7: { halign: "right", cellWidth: 26 },
-          8: { halign: "right", cellWidth: 27 },
+          5: { halign: "right", cellWidth: 24, fontStyle: FONT.bold },
+          6: { halign: "right", cellWidth: 27 },
+          7: { halign: "right", cellWidth: 28 },
+          8: { halign: "right", cellWidth: 32, fontStyle: FONT.bold },
         }
       : {
-          0: { cellWidth: 52 },
-          1: { cellWidth: 28 },
+          0: { cellWidth: 48, fontStyle: FONT.bold },
+          1: { cellWidth: 26 },
           2: { halign: "right", cellWidth: 22 },
           3: { halign: "right", cellWidth: 20 },
           4: { halign: "right", cellWidth: 20 },
-          5: { halign: "right", cellWidth: 24 },
-          6: { halign: "right", cellWidth: 22 },
-          7: { halign: "right", cellWidth: 25 },
-          8: { halign: "right", cellWidth: 25 },
-          9: { halign: "right", cellWidth: 31 },
+          5: { halign: "right", cellWidth: 25 },
+          6: { halign: "right", cellWidth: 22, fontStyle: FONT.bold },
+          7: { halign: "right", cellWidth: 26 },
+          8: { halign: "right", cellWidth: 27 },
+          9: { halign: "right", cellWidth: 33, fontStyle: FONT.bold },
         },
     didParseCell: (data) => {
       if (data.section === "body" && catRowIdx.has(data.row.index)) {
