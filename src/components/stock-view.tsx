@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Coins,
+  FileDown,
   PackageSearch,
   Scale,
   Search,
@@ -35,6 +36,9 @@ import { cn } from "@/lib/utils";
 import { useFetch, useDebouncedValue } from "@/hooks/use-fetch";
 import { useCategories } from "@/components/categories-provider";
 import { formatMoney } from "@/lib/constants";
+import { generateInventoryPdf } from "@/lib/pdf-inventory";
+import { companyInfoFromSettings, loadLogoAsDataUrl } from "@/lib/pdf-reports";
+import { useSettingsStore } from "@/lib/settings-store";
 import type { InventoryProductRow, InventoryResponse } from "@/lib/types";
 
 // ─── Types de période ───────────────────────────────────────────────────────
@@ -67,8 +71,10 @@ export function StockView() {
   const [offset, setOffset] = useState(0);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
+  const [pdfLoading, setPdfLoading] = useState(false);
   const debouncedQ = useDebouncedValue(q);
   const { categories } = useCategories();
+  const settings = useSettingsStore((s) => s.settings);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -126,6 +132,34 @@ export function StockView() {
     setOffset(0);
   };
 
+  /** Export PDF de l'état du stock courant (période + filtres actifs). */
+  const handleExportPdf = async () => {
+    if (!data) return;
+    setPdfLoading(true);
+    try {
+      const logoDataUrl = await loadLogoAsDataUrl(settings?.logo);
+      const filterParts = [
+        category !== "all"
+          ? `Catégorie : ${categories.find((c) => c.code === category)?.label ?? category}`
+          : null,
+        debouncedQ.trim() ? `Recherche : « ${debouncedQ.trim()} »` : null,
+      ].filter(Boolean) as string[];
+      generateInventoryPdf({
+        variant: "stock",
+        period: data.period,
+        rows,
+        groupBy: "produit",
+        totals,
+        productCount: rows.length,
+        filterLabel: filterParts.length > 0 ? filterParts.join("  ·  ") : null,
+        logoDataUrl,
+        companyInfo: companyInfoFromSettings(settings),
+      });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const periodLabel = data?.period.label ?? "…";
   const rangeLabel = data ? `${data.period.startLabel} — ${data.period.endLabel}` : "";
   const isCurrentPeriod = offset === 0;
@@ -141,13 +175,24 @@ export function StockView() {
             produit, valorisés aux prix d&apos;achat et de vente.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={refetch}
-          className="self-start rounded-full border px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          Actualiser
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            disabled={!data || pdfLoading || rows.length === 0}
+            className="inline-flex items-center gap-1.5 self-start rounded-full border px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <FileDown className="h-3.5 w-3.5" aria-hidden />
+            {pdfLoading ? "Génération…" : "Exporter PDF"}
+          </button>
+          <button
+            type="button"
+            onClick={refetch}
+            className="self-start rounded-full border px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            Actualiser
+          </button>
+        </div>
       </div>
 
       {/* Sélection de période */}

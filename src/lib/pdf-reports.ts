@@ -10,7 +10,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate, PAYMENT_METHOD_LABELS, COMPANY } from "@/lib/constants";
-import type { ClientDeposit, ClientWithdrawal } from "@/lib/types";
+import type { ClientDeposit, ClientWithdrawal, Settings } from "@/lib/types";
 
 /* ─── Police identique aux factures (pdf.ts) ──────────────────────────────── */
 
@@ -91,6 +91,23 @@ export function getDefaultCompanyInfo(): CompanyInfo {
   };
 }
 
+/**
+ * Construit les infos société depuis les paramètres enregistrés (store zustand).
+ * Repli sur les constantes par défaut si absents ou incomplets.
+ */
+export function companyInfoFromSettings(settings?: Settings | null): CompanyInfo {
+  if (!settings) return getDefaultCompanyInfo();
+  return {
+    name: settings.nomSociete || COMPANY.name,
+    tagline: settings.tagline || COMPANY.tagline,
+    address: settings.adresse || COMPANY.address,
+    phone: settings.telephone || COMPANY.phone,
+    email: settings.email || COMPANY.email,
+    rc: settings.rc || undefined,
+    ninea: settings.ninea || undefined,
+  };
+}
+
 /* ─── Filtres de période ─────────────────────────────────────────────────── */
 
 export type Period = "jour" | "semaine" | "mois" | "annee";
@@ -154,7 +171,7 @@ function filterByPeriod<T extends Record<string, unknown>>(
 
 /* ─── Dessiner l'en-tête société (logo + infos) — même style que factures ─── */
 
-function drawCompanyHeader(
+export function drawCompanyHeader(
   doc: jsPDF,
   logoDataUrl?: string,
   companyInfo?: CompanyInfo
@@ -233,7 +250,7 @@ function drawCompanyHeader(
 
 /* ─── Dessiner le pied de page (identique aux factures) ────────────────────── */
 
-function drawFooter(doc: jsPDF, info: CompanyInfo) {
+export function drawFooter(doc: jsPDF, info: CompanyInfo) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const pageCount = doc.getNumberOfPages();
@@ -873,6 +890,50 @@ function amountInWordsFCFA(amount: number): string {
 let cachedLogoDataUrl: string | null = null;
 let cachedLogoKey: string | null = null;
 
+/** Encode un Blob en data URL sans transformation (repli). */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Réduit une image (Blob) via canvas pour éviter d'embarquer un bitmap brut
+ * géant dans les PDF : un logo source de 1739×1485 px produisait des PDF de
+ * ~7,8 Mo. 320 px suffisent largement pour un logo imprimé à 30×25,6 mm
+ * (~250 dpi). Conserve la transparence (PNG).
+ */
+function downscaleImageBlob(blob: Blob, maxSide: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas 2D indisponible");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(objectUrl);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (e) {
+        URL.revokeObjectURL(objectUrl);
+        reject(e instanceof Error ? e : new Error("Réduction impossible"));
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Image illisible"));
+    };
+    img.src = objectUrl;
+  });
+}
+
 /**
  * Charge le logo de l'entreprise en base64 data URL.
  * Utilise le logo des settings si disponible, sinon le logo par défaut `/logo-green.png`.
@@ -890,12 +951,13 @@ export async function loadLogoAsDataUrl(logoUrl?: string | null): Promise<string
       return undefined;
     }
     const blob = await response.blob();
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    let dataUrl: string;
+    try {
+      dataUrl = await downscaleImageBlob(blob, 320);
+    } catch {
+      // Repli : encoder le blob original sans réduction
+      dataUrl = await blobToDataUrl(blob);
+    }
     cachedLogoDataUrl = dataUrl;
     cachedLogoKey = key;
     return dataUrl;
